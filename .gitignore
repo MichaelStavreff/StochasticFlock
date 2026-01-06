@@ -1,0 +1,7 @@
+# Ignore the compiled executables
+*
+!*.cpp
+!*.hpp
+!*.h
+!*.json
+!*.gitignore
