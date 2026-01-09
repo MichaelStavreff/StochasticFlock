@@ -5,16 +5,22 @@ using namespace Eigen;
 using namespace std;
 struct Simulation;
 
-void init_simulation(Simulation &simulation, const int simulation_rounds);
+void init_simulation(Simulation &simulation);
 
 int main()
 {
-    int simulation_rounds{1000};
-    Simulation Sim;
+    Simulation Sim(10000, 1);
     // state matrix (cross sectional, all birds), delay matrix, matrix vector views
     // all followers at t=0
     // skip first delay amount of time to fill buffer
 
-    init_simulation(Sim, simulation_rounds);
+    // for (int i{}; i < 10; ++i)
+    // {
+    //     cout << "Round" << " " << i << '\n';
+    //     cout << Sim.full_states << '\n' << "-------------------------------------------" << '\n';
+    //     Sim.update_state(Sim.states);
+    // }
+
+    init_simulation(Sim);
     return 0;
 }

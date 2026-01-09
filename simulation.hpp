@@ -13,29 +13,42 @@ using namespace std;
 
 struct Simulation
 {
+    int dimensions{};
     static constexpr int buffer_cycles{static_cast<int>(delay / timestep)};
     int steps_back{};
+    int delayed_steps{};
+    int rounds{};
+
     mt19937 seed;
-    bernoulli_distribution status{probability};
+    double rate{probability / 0.1};
+    bernoulli_distribution status{rate * timestep};
 
-    Matrix<double, n_birds + n_birds * buffer_cycles, 5, RowMajor> full_states;
-    Map<Matrix<double, n_birds, 5, RowMajor>> states;
-    Map<Matrix<double, n_birds, 5, RowMajor>> buffer;
+    Matrix<double, n_birds + n_birds * buffer_cycles, 3, RowMajor> full_states;
+    Map<Matrix<double, n_birds, 3, RowMajor>> states;
+    Map<Matrix<double, n_birds, 3, RowMajor>> buffer;
     Vector<double, n_birds> y_states;
+    // we store timers apart from states to not clutter CPU registers/SIMD
+    Matrix<double, n_birds + n_birds * buffer_cycles, 2, RowMajor> timers;
+    Map<Matrix<double, n_birds, 2, RowMajor>> timer_states;
+    Map<Matrix<double, n_birds, 2, RowMajor>> timer_buffer;
 
-    Simulation()
-        : states(full_states.topRows(n_birds).data()),
-          buffer(full_states.topRows(n_birds).data()) // buffer, states initalized overlapping
+    Simulation(const int rounds, const int dimensions)
+        : states(full_states.topRows(n_birds).data()), buffer(full_states.topRows(n_birds).data()),
+          timer_states(timers.topRows(n_birds).data()), timer_buffer(timers.topRows(n_birds).data()), rounds(rounds),
+          dimensions(dimensions)
     {
         seed.seed(random_device{}());
         auto positions{generate_initial_state()};
         y_states = positions.col(1);
         full_states.setZero();
-        full_states.col(0) = positions.col(0).replicate(static_cast<int>(1 + (delay / timestep)), 1);
-
+        timers.setZero();
+        full_states.col(0) = positions.col(0).replicate(1 + buffer_cycles, 1);
         // initial offset of maps
-        double *new_address = states.data() + (buffer_cycles * n_birds * 5);
-        new (&buffer) Map<Matrix<double, n_birds, 5, RowMajor>>(new_address, n_birds, 5);
+        double *new_address = states.data() + (1 * n_birds * 3);
+        new (&buffer) Map<Matrix<double, n_birds, 3, RowMajor>>(new_address, n_birds, 3);
+
+        double *new_address_timers = timers.data() + (1 * n_birds * 2);
+        new (&timer_buffer) Map<Matrix<double, n_birds, 2, RowMajor>>(new_address_timers, n_birds, 2);
     }
 
     Matrix<double, n_birds, 2, RowMajor> generate_initial_state()
@@ -99,7 +112,7 @@ struct Simulation
         return neighbors;
     }
 
-    Vector<double, 2 * n_birds> flock_acceleration(Ref<Matrix<double, n_birds, 5, RowMajor>> states)
+    Vector<double, 2 * n_birds> flock_acceleration(Ref<Matrix<double, n_birds, 3, RowMajor>> states)
     {
         Vector<double, n_birds> acceleration_vec;
         Vector<double, n_birds> closest_neighbors;
@@ -128,46 +141,55 @@ struct Simulation
     }
     void shift_back() // shifts both maps
     {
-        steps_back = (steps_back + 1) % buffer_cycles; // circular modulus
-        double *new_address_states = full_states.data() + (steps_back * n_birds * 5);
-        new (&states) Map<Matrix<double, n_birds, 5, RowMajor>>(new_address_states, n_birds, 5);
+        steps_back = (steps_back + 1) % (buffer_cycles + 1); // circular modulus
+        double *new_address_states = full_states.data() + (steps_back * n_birds * 3);
+        new (&states) Map<Matrix<double, n_birds, 3, RowMajor>>(new_address_states, n_birds, 3);
 
-        steps_back = (steps_back + 1) % buffer_cycles;
-        double *new_address_buffer = full_states.data() + steps_back * n_birds * 5;
-        new (&buffer) Map<Matrix<double, n_birds, 5, RowMajor>>(new_address_buffer, n_birds, 5);
+        double *new_address_timers = timers.data() + (steps_back * n_birds * 2);
+        new (&timer_states) Map<Matrix<double, n_birds, 2, RowMajor>>(new_address_timers, n_birds, 2);
+
+        int delayed_steps = (steps_back + 1) % (buffer_cycles + 1);
+        double *new_address_buffer = full_states.data() + delayed_steps * n_birds * 3;
+        new (&buffer) Map<Matrix<double, n_birds, 3, RowMajor>>(new_address_buffer, n_birds, 3);
+
+        double *new_address_timers_delay = timers.data() + delayed_steps * n_birds * 2;
+        new (&timer_buffer) Map<Matrix<double, n_birds, 2, RowMajor>>(new_address_timers_delay, n_birds, 2);
     }
 
-    void update_state(Ref<Matrix<double, n_birds, 5, RowMajor>> states)
+    void update_state(Ref<Matrix<double, n_birds, 3, RowMajor>> states)
     {
         auto acceleration_return{flock_acceleration(buffer)};
 
         for (int i = 0; i < n_birds; ++i)
         {
-            if (states.col(2)[i] == 1 &&
-                buffer.col(3)[i] < pt) // check if leaders should expire, assign refractory period
+            // we use < or > 0.5 instead of == 1 to avoid floating point issues
+
+            if (states.col(2)[i] > 0.5 &&
+                timer_buffer.col(0)[i] < pt) // check if leaders should expire, assign refractory period
             {
                 buffer.col(2)[i] = 0;
-                buffer.col(4)[i] = rt;
+                timer_buffer.col(1)[i] = rt;
             }
-            if (states.col(2)[i] == 1 && states.col(3)[i] > 0) // decremet leaders' persistence time
-                buffer.col(3)[i] -= timestep;
-            if (states.col(2)[i] == 0 && states.col(4)[i] > 0 &&
-                states.col(4)[i] != rt) // decrement followers' refractory time who weren't just demoted
-                buffer.col(4)[i] -= timestep;
-            if (states.col(2)[i] == 0 && states.col(4)[i] == 0) // followers without refractory time roll for leader
+            if (states.col(2)[i] > 0.5 && timer_states.col(0)[i] > 0) // decremet leaders' persistence time
+                timer_buffer.col(0)[i] -= timestep;
+            if (states.col(2)[i] < 0.5 && timer_states.col(1)[i] > 0 &&
+                timer_states.col(1)[i] != rt) // decrement followers' refractory time who weren't just demoted
+                timer_buffer.col(1)[i] -= timestep;
+            if (states.col(2)[i] < 0.5 &&
+                timer_states.col(1)[i] == 0) // followers without refractory time roll for leader
                 buffer.col(2)[i] = status(seed);
-            if (buffer.col(2)[i] == 1 &&
-                states.col(2)[i] == 0) // assign new leaders persistence time if they werent one in previous step
-                buffer.col(3)[i] = pt;
-            if (states.col(2)[i] == 1) // propagate leaders to next state last
+            if (buffer.col(2)[i] > 0.5 &&
+                states.col(2)[i] < 0.5) // assign new leaders persistence time if they werent one in previous step
+                timer_buffer.col(0)[i] = pt;
+            if (states.col(2)[i] > 0.5) // propagate leaders to next state last
                 buffer.col(2)[i] = 1;
-            if (states.col(2)[i] == 1 && acceleration_return(n_birds + i) > pd)
+            if (states.col(2)[i] > 0.5 && acceleration_return(n_birds + i) > pd)
             { // demote leaders which stray too far
                 buffer.col(2)[i] = 0;
-                buffer.col(4)[i] = rt;
+                timer_buffer.col(1)[i] = rt;
             }
         }
-        buffer.col(1) = states.col(1) + acceleration_return(seq(1, n_birds)) *
+        buffer.col(1) = states.col(1) + acceleration_return(seq(0, n_birds - 1)) *
                                             timestep; //"future" position, will become present after shift
         buffer.col(0) = states.col(0) + states.col(1) * timestep;
         shift_back();
