@@ -36,9 +36,9 @@ void init_simulation(Simulation1d &simulation)
     title.setString("StochasticFlock");
     title.setPosition(0, height * 0.97);
 
-    sf::VertexArray plot_birds(sf::Points, n_birds);
+    sf::VertexArray plot_birds(sf::Quads, n_birds * 4);
 
-    Eigen::Ref<Eigen::Matrix<double, n_birds, 3, Eigen::RowMajor>> starting_positions{simulation.states};
+    Eigen::Ref<Eigen::Matrix<double, n_birds, 3>> starting_positions{simulation.states};
     const Eigen::Vector<double, n_birds> y_plot{simulation.y_states};
 
     sf::RenderWindow window(sf::VideoMode(width, height), "StochasticFlock");
@@ -74,23 +74,49 @@ void init_simulation(Simulation1d &simulation)
         }
         // if (simulation.dimensions==1) {
         simulation.update_state(simulation.states);
+        std::cout << simulation.full_states << '\n' << "After ^" << '\n';
 
+        switch (simulation.steps_back)
+        {
+        case 0:
+            std::cout << " ^" << '\n' << " States" << '\n';
+            break;
+        case 1:
+            std::cout << "                                       ^" << '\n'
+                      << "                                       States" << '\n';
+            break;
+        case 2:
+            std::cout << "                                                                         ^" << '\n'
+                      << "                                                                         States " << '\n';
+            break;
+        }
+        std::cout << "-------------------------------------------------------" << '\n'
+                  << "-------------------------------------------------------" << '\n';
         for (int i = 0; i < n_birds; ++i)
         {
+            int v = i * 4;
             float x_pos = static_cast<float>(width / 2 + simulation.states(i, 0));
             float y_pos = static_cast<float>(simulation.y_states(i));
-
-            plot_birds[i].position = sf::Vector2f(x_pos, y_pos);
-
-            if (simulation.states(i, 2) == 1.0)
+            float size = 1.0f;
+            sf::Color birdColor = sf::Color::White;
+            if (simulation.buffer(i, 2) > 0.5) // Leader
             {
-                plot_birds[i].color = sf::Color::Yellow; // Leaders
+                size = 4.0f;
+                birdColor = sf::Color::Yellow;
             }
-            else
+
+            plot_birds[v + 0].position = sf::Vector2f(x_pos, y_pos);
+            plot_birds[v + 1].position = sf::Vector2f(x_pos + size, y_pos);
+            plot_birds[v + 2].position = sf::Vector2f(x_pos + size, y_pos + size);
+            plot_birds[v + 3].position = sf::Vector2f(x_pos, y_pos + size);
+
+            for (int j = 0; j < 4; ++j)
             {
-                plot_birds[i].color = sf::Color::White; // Followers
+                plot_birds[v + j].color = birdColor;
             }
         }
+        simulation.shift_back();
+        std::cout << "SHIFT" << '\n';
 
         window.clear(sf::Color::Black);
         stats.setString(std::format("n={}\nIter: {}", n_birds, iterations));
@@ -123,7 +149,8 @@ void init_simulation(Simulation1d &simulation)
 
 //     sf::VertexArray plot_birds(sf::Points, n_birds);
 
-//     Eigen::Matrix<float, n_birds, 2, Eigen::RowMajor> starting_positions{simulation.states.leftCols(2).cast<float>()};
+//     Eigen::Matrix<float, n_birds, 2, Eigen::RowMajor>
+//     starting_positions{simulation.states.leftCols(2).cast<float>()};
 
 //     sf::RenderWindow window(sf::VideoMode(width_2d, height_2d), "StochasticFlock");
 //     window.setFramerateLimit(framerate);
