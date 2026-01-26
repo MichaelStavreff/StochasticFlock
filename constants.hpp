@@ -1,27 +1,30 @@
 #pragma once
 // parameters
-inline constexpr int n_birds{20};
-inline constexpr int M{6};                   // bird set size,        7
-inline constexpr double delay{0.1};          // delay,                0.1
-inline constexpr double pt{700};             // persistence time,     700
-inline constexpr double pd{200};             // persistence distance, 20
-inline constexpr double rt{800};             // refractory time,      800
-inline constexpr double rep{0.5};            // repulsion force,      2.5
-inline constexpr double ali{0.05};           // alignment force,      3
-inline constexpr double att{0.15};           // attraction force,     0.01
-inline constexpr double timestep{0.05};      //                       0.1
-inline constexpr double probability{0.0002}; //                       0.0002
-inline constexpr double epsilon{0.1};        // std::numeric_limits<double>::epsilon() for machine epsilon, 0.0001
-inline constexpr int buffer_cycles{static_cast<int>(delay / timestep)};
+inline constexpr int kN_BIRDS{100};
+inline constexpr int kM{6};                   // bird set size,        7
+inline constexpr double kDELAY{0.1};          // delay,                0.1
+inline constexpr double kPT{60};             // persistence time,     700
+inline constexpr double kPD{150};             // persistence distance, 20
+inline constexpr double kRT{60};             // refractory time,      800
+inline constexpr double kREP{0.5};            // repulsion force,      2.5
+inline constexpr double kALI{0.05};           // alignment force,      3
+inline constexpr double kATT{0.15};           // attraction force,     0.01
+inline constexpr double kTIMESTEP{0.05};      //                       0.1
+inline constexpr double kPROBABILITY{0.0002}; //                       0.0002
+inline constexpr double kEPSILON{0.1};        // std::numeric_limits<double>::epsilon() for machine epsilon, 0.0001
+inline constexpr int kBUFFER_CYCLES{static_cast<int>(kDELAY / kTIMESTEP)};
 
-inline constexpr int framerate{60};
-inline constexpr int rounds{10000};
+inline constexpr int kFRAMERATE{60};
+inline constexpr int kROUNDS{10000};
+// Higher dimensional parameters
+inline constexpr int kTREE_MEDIAN_SAMPLE{30};
+inline constexpr int kLEAF_SIZE{16};
 // 1D window
-inline constexpr float width{2200};
-inline constexpr float height{400};
-inline constexpr float bound_offset{0.1};    // purely visual "height" of 1D line
-inline constexpr int starting_interval{200}; // bound which birds are initialized
+inline constexpr float kWIDTH{2200};
+inline constexpr float kHEIGHT{400};
+inline constexpr float kBOUND_OFFSET{0.1};    // purely visual "height" of 1D line
+inline constexpr int kSTARTING_INTERVAL{200}; // bound which birds are initialized
 // 2D window
-inline constexpr float width_2d{1200};
-inline constexpr float height_2d{900};
-inline constexpr float box_size{200}; // starting interval in 2D
+inline constexpr float kWIDTH_2D{1200};
+inline constexpr float kHEIGHT_2D{900};
+inline constexpr float kBOX_SIZE{200}; // starting interval in 2D

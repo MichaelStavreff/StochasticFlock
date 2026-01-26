@@ -1,10 +1,13 @@
 #pragma once
 #include <Eigen/Dense>
 #include <algorithm>
+#include <array>
 #include <cmath>
+#include <cstdint>
 #include <iostream>
 #include <limits>
 #include <numeric>
+#include <ostream> //endl
 #include <random>
 
 #include "constants.hpp"
@@ -12,163 +15,150 @@
 //  avoid recursion for  KD tree, extra overhead for additional stack frames
 //  pre-allocate memory for tree algorithm
 //  revisit nearest neighbors for 1D, pointer walk better?
-// m_ member variables
 // cmake
+// evaluate where to include floats or doubles (during calculations/cast back to float for storage)
+// verify SIMD/cache misses
 
-struct Simulation1d
+class Simulation1d
 {
-    int steps_back{};
-    int delayed_steps{};
+  public:
+    Eigen::Matrix<double, kN_BIRDS, 3 * (1 + kBUFFER_CYCLES)> full_states;
+    Eigen::Matrix<double, kN_BIRDS, 2 * (1 + kBUFFER_CYCLES)> timers;
 
-    std::mt19937 seed;
-    double rate{probability / 0.1};
-    std::bernoulli_distribution status{rate * timestep};
+  private:
+    Eigen::Vector<double, 2 * kN_BIRDS> packed_result_;
+    Eigen::Vector<double, kN_BIRDS> acceleration_vec_;
+    Eigen::Vector<double, kN_BIRDS> closest_neighbors_;
+    Eigen::Vector<int, kN_BIRDS> idx_;
 
-    Eigen::Matrix<double, n_birds, 3 * (1 + buffer_cycles)> full_states;
-    Eigen::Map<Eigen::Matrix<double, n_birds, 3>> states;
-    Eigen::Map<Eigen::Matrix<double, n_birds, 3>> buffer;
-    Eigen::Vector<double, n_birds> y_states;
-    // we store timers apart from states to not clutter CPU registers/SIMD
-    Eigen::Matrix<double, n_birds, 2 * (1 + buffer_cycles)> timers;
-    Eigen::Map<Eigen::Matrix<double, n_birds, 2>> timer_states;
-    Eigen::Map<Eigen::Matrix<double, n_birds, 2>> timer_buffer;
+  public:
+    Eigen::Map<Eigen::Matrix<double, kN_BIRDS, 3>> states;
+    Eigen::Map<Eigen::Matrix<double, kN_BIRDS, 3>> buffer;
+    Eigen::Map<Eigen::Matrix<double, kN_BIRDS, 2>> timer_states;
+    Eigen::Map<Eigen::Matrix<double, kN_BIRDS, 2>> timer_buffer;
+    Eigen::Vector<double, kN_BIRDS> y_states;
 
-    // nearest neighbor buffer
-    Eigen::Vector<int, M> neighbors;
-    double target_val;
-    Eigen::Vector<int, n_birds> idx;
-    // flock acceleration buffers
-    Eigen::Vector<double, n_birds> acceleration_vec;
-    Eigen::Vector<double, n_birds> closest_neighbors;
-    Eigen::Vector<double, 2 * n_birds> packed_result;
+  private:
+    Eigen::Vector<int, kM> neighbors_;
+    std::mt19937 &seed_;
+    double *new_address_states_;
+    double *new_address_buffer_;
+    double target_val_;
+    double rate_{kPROBABILITY / kTIMESTEP};
+    std::bernoulli_distribution status_{rate_ * kTIMESTEP};
+    int steps_back_{};
+    int delayed_steps_{};
 
-    Simulation1d()
-        : states(full_states.topRows(n_birds).data()), buffer(full_states.topRows(n_birds).data()),
-          timer_states(timers.topRows(n_birds).data()), timer_buffer(timers.topRows(n_birds).data())
+  public:
+    Simulation1d(std::mt19937 &seed)
+        : states(full_states.topRows(kN_BIRDS).data()), buffer(full_states.topRows(kN_BIRDS).data()),
+          timer_states(timers.topRows(kN_BIRDS).data()), timer_buffer(timers.topRows(kN_BIRDS).data()), seed_(seed)
     {
-        seed.seed(std::random_device{}());
-        auto positions{generate_initial_state()};
+
+        Eigen::Matrix<double, kN_BIRDS, 2> positions{generate_initial_state()};
         y_states = positions.col(1);
         full_states.setZero();
         timers.setZero();
-        for (int i = 0; i < buffer_cycles + 1; ++i)
+        for (int i = 0; i < kBUFFER_CYCLES + 1; ++i)
             full_states.col(3 * i) = positions.col(0);
 
         // initial offset of maps
-        double *new_address = states.data() + (n_birds * 3);
-        new (&buffer) Eigen::Map<Eigen::Matrix<double, n_birds, 3>>(new_address, n_birds, 3);
+        double *new_address = states.data() + (kN_BIRDS * 3);
+        new (&buffer) Eigen::Map<Eigen::Matrix<double, kN_BIRDS, 3>>(new_address, kN_BIRDS, 3);
 
-        double *new_address_timers = timers.data() + (n_birds * 2);
-        new (&timer_buffer) Eigen::Map<Eigen::Matrix<double, n_birds, 2>>(new_address_timers, n_birds, 2);
+        double *new_address_timers = timers.data() + (kN_BIRDS * 2);
+        new (&timer_buffer) Eigen::Map<Eigen::Matrix<double, kN_BIRDS, 2>>(new_address_timers, kN_BIRDS, 2);
     }
 
-    Eigen::Matrix<double, n_birds, 2> generate_initial_state()
+    Eigen::Matrix<double, kN_BIRDS, 2> generate_initial_state()
     {
-        std::uniform_real_distribution<double> starting_x{-starting_interval / 2, starting_interval / 2};
-        std::uniform_real_distribution<double> starting_y{height * (0.5f - bound_offset),
-                                                          height * (0.5f + bound_offset)};
-        Eigen::Matrix<double, n_birds, 2> starting_states;
-        starting_states.col(0) = starting_states.col(0).NullaryExpr([&]() { return starting_x(seed); });
-        starting_states.col(1) = starting_states.col(1).NullaryExpr([&]() { return starting_y(seed); });
+        std::uniform_real_distribution<double> starting_x{-kSTARTING_INTERVAL / 2, kSTARTING_INTERVAL / 2};
+        std::uniform_real_distribution<double> starting_y{kHEIGHT * (0.5f - kBOUND_OFFSET),
+                                                          kHEIGHT * (0.5f + kBOUND_OFFSET)};
+        Eigen::Matrix<double, kN_BIRDS, 2> starting_states;
+        starting_states.col(0) = starting_states.col(0).NullaryExpr([&]() { return starting_x(seed_); });
+        starting_states.col(1) = starting_states.col(1).NullaryExpr([&]() { return starting_y(seed_); });
         return starting_states;
     }
 
-    void nearest_M_idx(const Eigen::Ref<const Eigen::Vector<double, n_birds>, 0> positions, int target_idx)
+    void nearest__idx(const Eigen::Ref<const Eigen::Vector<double, kN_BIRDS>> positions, int target_idx)
     {
-        target_val = positions(target_idx);
-        idx.setLinSpaced(0, n_birds - 1);
+        target_val_ = positions(target_idx);
+        idx_.setLinSpaced(0, kN_BIRDS - 1);
 
-        std::nth_element(idx.data(), idx.data() + M, idx.data() + idx.size(), [&](int i, int j) {
-            return std::abs(positions(i) - target_val) < std::abs(positions(j) - target_val);
+        std::nth_element(idx_.begin(), idx_.begin() + kM - 1, idx_.end(), [&](int i, int j) {
+            return std::abs(positions(i) - target_val_) < std::abs(positions(j) - target_val_);
         });
 
-        for (int i = 0; i < M; ++i)
+        for (int i = 0; i < kM; ++i)
         {
-            neighbors(i) = idx(i);
+            neighbors_(i) = idx_(i);
         }
-        std::sort(neighbors.data(), neighbors.data() + neighbors.size());
+        std::sort(neighbors_.begin(), neighbors_.end());
     }
 
-    void flock_acceleration(Eigen::Ref<Eigen::Matrix<double, n_birds, 3>> states)
+    void flock_acceleration(Eigen::Ref<Eigen::Matrix<double, kN_BIRDS, 3>> states)
     {
         // Eigen::internal::set_is_malloc_allowed(false);
 
         auto positions{states.col(0)};
         auto velocities{states.col(1)};
-        auto status{states.col(2)};
-        double cm{ali / M};
-        for (int i = 0; i < n_birds; ++i)
+        auto status_{states.col(2)};
+        double cm{kALI / kM};
+        for (int i = 0; i < kN_BIRDS; ++i)
         {
-            nearest_M_idx(positions, i);
-            closest_neighbors(i) = neighbors(0);
-            auto neighbor_positions{positions(neighbors).array()};
-            auto neighbor_velocities{velocities(neighbors).array()};
+            nearest__idx(positions, i);
+            closest_neighbors_(i) = neighbors_(0);
+            auto neighbor_positions{positions(neighbors_).array()};
+            auto neighbor_velocities{velocities(neighbors_).array()};
             auto pos_diff{neighbor_positions - positions(i)};
             auto vel_diff{neighbor_velocities - velocities(i)};
-            auto a_sum_1{((pos_diff.array()) / ((pos_diff).array().abs().square() + epsilon))};
-            auto a_sum_2{(cm * (vel_diff) + att * (pos_diff))};
-            double acceleration{-rep * a_sum_1.sum() + (1.0 - status(i)) * a_sum_2.sum()};
-            acceleration_vec(i) = acceleration;
+            auto a_sum_1{((pos_diff.array()) / ((pos_diff).array().abs().square() + kEPSILON))};
+            auto a_sum_2{(cm * (vel_diff) + kATT * (pos_diff))};
+            double acceleration{-kREP * a_sum_1.sum() + (1.0 - status_(i)) * a_sum_2.sum()};
+            acceleration_vec_(i) = acceleration;
         }
-        packed_result << acceleration_vec,
-            closest_neighbors; // packing closest neighbors for persistence distance tracking
+        packed_result_ << acceleration_vec_,
+            closest_neighbors_; // packing closest neighbors for persistence distance tracking
         // Eigen::internal::set_is_malloc_allowed(true);
     }
     void shift_back() // shifts both maps, remapping is not a heap allocation!
     {
-        steps_back = (steps_back + 1) % (buffer_cycles + 1); // circular modulus
-        double *new_address_states = full_states.data() + (steps_back * n_birds * 3);
-        new (&states) Eigen::Map<Eigen::Matrix<double, n_birds, 3>>(new_address_states, n_birds, 3);
+        steps_back_ = (steps_back_ + 1) % (kBUFFER_CYCLES + 1); // circular modulus
+        new_address_states_ = full_states.data() + (steps_back_ * kN_BIRDS * 3);
+        new (&states) Eigen::Map<Eigen::Matrix<double, kN_BIRDS, 3>>(new_address_states_, kN_BIRDS, 3);
 
-        double *new_address_timers = timers.data() + (steps_back * n_birds * 2);
-        new (&timer_states) Eigen::Map<Eigen::Matrix<double, n_birds, 2>>(new_address_timers, n_birds, 2);
+        double *new_address_timers = timers.data() + (steps_back_ * kN_BIRDS * 2);
+        new (&timer_states) Eigen::Map<Eigen::Matrix<double, kN_BIRDS, 2>>(new_address_timers, kN_BIRDS, 2);
 
-        int delayed_steps = (steps_back + 1) % (buffer_cycles + 1);
-        double *new_address_buffer = full_states.data() + delayed_steps * n_birds * 3;
-        new (&buffer) Eigen::Map<Eigen::Matrix<double, n_birds, 3>>(new_address_buffer, n_birds, 3);
+        delayed_steps_ = (steps_back_ + 1) % (kBUFFER_CYCLES + 1);
+        new_address_buffer_ = full_states.data() + delayed_steps_ * kN_BIRDS * 3;
+        new (&buffer) Eigen::Map<Eigen::Matrix<double, kN_BIRDS, 3>>(new_address_buffer_, kN_BIRDS, 3);
 
-        double *new_address_timers_delay = timers.data() + delayed_steps * n_birds * 2;
-        new (&timer_buffer) Eigen::Map<Eigen::Matrix<double, n_birds, 2>>(new_address_timers_delay, n_birds, 2);
+        double *new_address_timers_delay = timers.data() + delayed_steps_ * kN_BIRDS * 2;
+        new (&timer_buffer) Eigen::Map<Eigen::Matrix<double, kN_BIRDS, 2>>(new_address_timers_delay, kN_BIRDS, 2);
     }
 
-    void update_state(Eigen::Ref<Eigen::Matrix<double, n_birds, 3>> states)
+    void update_state(Eigen::Ref<Eigen::Matrix<double, kN_BIRDS, 3>> states)
     {
         flock_acceleration(buffer);
 
-        std::cout << full_states << '\n' << "Before ^" << '\n';
-
-        switch (steps_back)
-        {
-        case 0:
-            std::cout << " ^" << '\n' << " States" << '\n';
-            break;
-        case 1:
-            std::cout << "                                      ^" << '\n'
-                      << "                                      States" << '\n';
-            break;
-        case 2:
-            std::cout << "                                                                       ^" << '\n'
-                      << "                                                                       States" << '\n';
-            break;
-        }
-        std::cout << "-------------------------------------------------------" << '\n'
-                  << "-------------------------------------------------------" << '\n';
-        for (int i = 0; i < n_birds; ++i)
+        for (int i = 0; i < kN_BIRDS; ++i)
         {
             bool is_leader = states.col(2)[i] > 0.5;
-            double dist_to_neighbor = std::abs(states.col(0)[i] - states.col(0)[packed_result(n_birds + i)]);
+            double dist_to_neighbor = std::abs(states.col(0)[i] - states.col(0)[packed_result_(kN_BIRDS + i)]);
 
             if (is_leader)
             {
                 // LEADER LOGIC
                 bool expired = timer_states.col(0)[i] <= 0;
-                bool strayed = dist_to_neighbor > pd;
+                bool strayed = dist_to_neighbor > kPD;
 
                 if (expired || strayed)
                 {
                     // DEMOTE
                     buffer.col(2)[i] = 0;
-                    timer_buffer.col(1)[i] = rt;
+                    timer_buffer.col(1)[i] = kRT;
                     timer_buffer.col(0)[i] = 0;
                 }
                 else
@@ -176,7 +166,7 @@ struct Simulation1d
                     // REMAIN LEADER
                     buffer.col(2)[i] = 1;
                     if (timer_states.col(0)[i] > 0)
-                        timer_buffer.col(0)[i] = timer_states.col(0)[i] - timestep;
+                        timer_buffer.col(0)[i] = timer_states.col(0)[i] - kTIMESTEP;
                 }
             }
             else
@@ -185,182 +175,275 @@ struct Simulation1d
                 if (timer_states.col(1)[i] > 0)
                 {
                     // REFRACTORY PERIOD
-                    timer_buffer.col(1)[i] = std::max(0.0, timer_states.col(1)[i] - timestep);
+                    timer_buffer.col(1)[i] = std::max(0.0, timer_states.col(1)[i] - kTIMESTEP);
                     buffer.col(2)[i] = 0;
                 }
                 else
                 {
                     // ELIGIBLE FOR PROMOTION
-                    double roll = status(seed);
+                    double roll = status_(seed_);
                     buffer.col(2)[i] = roll;
                     if (roll > 0.5)
                     {
-                        timer_buffer.col(0)[i] = pt; // Assign persistence
+                        timer_buffer.col(0)[i] = kPT; // Assign persistence
                     }
                 }
             }
         }
-        buffer.col(1) = states.col(1) + packed_result(Eigen::seq(0, n_birds - 1)) *
-                                            timestep; //"future" position, will become present after shift
-        buffer.col(0) = states.col(0) + states.col(1) * timestep;
+        buffer.col(1) = states.col(1) + packed_result_(Eigen::seq(0, kN_BIRDS - 1)) *
+                                            kTIMESTEP; //"future" position, will become present after shift
+        buffer.col(0) = states.col(0) + states.col(1) * kTIMESTEP;
     }
 };
 
-// struct Simulation2d
-// {
-//     int steps_back{};
-//     int delayed_steps{};
+class Simulation2d
+{
+  public:
+    Eigen::Matrix<double, kN_BIRDS, 4 * (1 + kBUFFER_CYCLES)> full_states;
+    Eigen::Matrix<double, kN_BIRDS, 2 * (1 + kBUFFER_CYCLES)> timers;
+    Eigen::Map<Eigen::Matrix<double, kN_BIRDS, 4>> states;
+    Eigen::Map<Eigen::Matrix<double, kN_BIRDS, 4>> buffer;
+    Eigen::Map<Eigen::Matrix<double, kN_BIRDS, 2>> timer_states;
+    Eigen::Map<Eigen::Matrix<double, kN_BIRDS, 2>> timer_buffer;
+    Eigen::Vector<double, kN_BIRDS> y_states;
 
-//     std::mt19937 seed;
-//     double rate{probability / 0.1};
-//     std::bernoulli_distribution status{rate * timestep};
+  private:
+    Eigen::Vector<double, kN_BIRDS> acceleration_vec_;
+    Eigen::Vector<double, kN_BIRDS> closest_neighbors_;
+    Eigen::Vector<double, 2 * kN_BIRDS> packed_result_;
+    Eigen::Vector<std::int32_t, 2 * kN_BIRDS - 1> left_idx_;
+    Eigen::Vector<std::int32_t, 2 * kN_BIRDS - 1> right_idx_;
+    Eigen::Vector<float, 2 * kN_BIRDS - 1> split_values_;
+    Eigen::Vector<int, kN_BIRDS> tree_idx_;
 
-//     Eigen::Matrix<double, n_birds + n_birds * buffer_cycles, 4, Eigen::RowMajor> full_states;
-//     Eigen::Map<Eigen::Matrix<double, n_birds, 4, Eigen::RowMajor>> states;
-//     Eigen::Map<Eigen::Matrix<double, n_birds, 4, Eigen::RowMajor>> buffer;
-//     // we store timers apart from states to not clutter CPU registers/SIMD
-//     Eigen::Matrix<double, n_birds + n_birds * buffer_cycles, 2, Eigen::RowMajor> timers;
-//     Eigen::Map<Eigen::Matrix<double, n_birds, 2, Eigen::RowMajor>> timer_states;
-//     Eigen::Map<Eigen::Matrix<double, n_birds, 2, Eigen::RowMajor>> timer_buffer;
+    Eigen::Vector<std::uint8_t, 2 * kN_BIRDS - 1> dimensions_;
+    Eigen::Vector<int, kM> neighbors_;
+    Eigen::Vector<std::uint8_t, kTREE_MEDIAN_SAMPLE> sample_indices_; // small sample of values for median
 
-//     // memory pool for KNN tree nodes
-//     //  2 columns for coords, 2 for left/right child
-//     Eigen::Matrix<double, n_birds, 4, Eigen::RowMajor> full_tree;
+    struct Tree_task_
+    {
+        int pool_idx{};
+        int start{};
+        int end{};
+        Tree_task_(int pool, int start, int end) : pool_idx{pool}, start{start}, end{end}
+        {
+        }
+    };
+    std::vector<Tree_task_> tree_stack_;
 
-//     Simulation2d()
-//         : states(full_states.topRows(n_birds).data()), buffer(full_states.topRows(n_birds).data()),
-//           timer_states(timers.topRows(n_birds).data()), timer_buffer(timers.topRows(n_birds).data())
-//     {
-//         seed.seed(std::random_device{}());
-//         auto positions{generate_initial_state()};
-//         full_states.setZero();
-//         timers.setZero();
-//         full_states.col(0) = positions.col(0).replicate(1 + buffer_cycles, 1);
-//         // initial offset of maps
-//         double *new_address = states.data() + (1 * n_birds * 4);
-//         new (&buffer) Eigen::Map<Eigen::Matrix<double, n_birds, 4, Eigen::RowMajor>>(new_address, n_birds, 4);
+    std::mt19937 seed_;
+    double rate_{kPROBABILITY / kTIMESTEP};
+    std::bernoulli_distribution status_{rate_ * kTIMESTEP};
+    double target_val_;
+    double *new_address_states_;
+    double *new_address_buffer_;
+    int steps_back_{};
+    int delayed_steps_{};
+    int dim_{};
+    int pool_ticker_{};
 
-//         double *new_address_timers = timers.data() + (1 * n_birds * 2);
-//         new (&timer_buffer)
-//             Eigen::Map<Eigen::Matrix<double, n_birds, 2, Eigen::RowMajor>>(new_address_timers, n_birds, 2);
-//     }
+  public:
+    Simulation2d(std::mt19937 &seed)
+        : states(full_states.topRows(kN_BIRDS).data()), buffer(full_states.topRows(kN_BIRDS).data()),
+          timer_states(timers.topRows(kN_BIRDS).data()), timer_buffer(timers.topRows(kN_BIRDS).data()), seed_(seed)
+    {
+        Eigen::Matrix<double, kN_BIRDS, 2> positions{generate_initial_state()};
+        y_states = positions.col(1);
+        full_states.setZero();
+        timers.setZero();
+        for (int i = 0; i < kBUFFER_CYCLES + 1; ++i)
+            full_states.col(4 * i) = positions.col(0);
 
-//     Eigen::Matrix<double, n_birds, 2, Eigen::RowMajor> generate_initial_state()
-//     {
-//         std::uniform_real_distribution<double> starting_x{-starting_interval / 2, starting_interval / 2};
-//         std::uniform_real_distribution<double> starting_y{height * (0.5f - bound_offset),
-//                                                           height * (0.5f + bound_offset)};
-//         Eigen::Matrix<double, n_birds, 2, Eigen::RowMajor> starting_states;
-//         starting_states.col(0) = starting_states.col(0).NullaryExpr([&]() { return starting_x(seed); });
-//         starting_states.col(1) = starting_states.col(1).NullaryExpr([&]() { return starting_y(seed); });
-//         return starting_states;
-//     }
+        // initial offset of maps
+        double *new_address = states.data() + (kN_BIRDS * 4);
+        new (&buffer) Eigen::Map<Eigen::Matrix<double, kN_BIRDS, 4>>(new_address, kN_BIRDS, 4);
 
-//     Eigen::Vector<double, M> nearest_M(
-//         const Eigen::Ref<const Eigen::Matrix<double, n_birds, 2, Eigen::RowMajor>> positions, int target_idx)
-//     {
-//         Eigen::Matrix<double, M, 2> neighbors;
-//         auto target_val = positions.row(target_idx);
-//         std::vector<int> idx(positions.size());
-//         std::iota(idx.begin(), idx.end(), 0);
+        double *new_address_timers = timers.data() + (kN_BIRDS * 2);
+        new (&timer_buffer) Eigen::Map<Eigen::Matrix<double, kN_BIRDS, 2>>(new_address_timers, kN_BIRDS, 2);
 
-//         std::nth_element(idx.begin(), idx.begin() + M, idx.end(), [&](int i, int j) {
-//             return std::abs(positions(i) - target_val) < std::abs(positions(j) - target_val);
-//         });
+        tree_stack_.reserve(120); // rough estimate of max depth
+    }
 
-//         for (int i = 0; i < M; ++i)
-//         {
-//             neighbors(i) = idx[i];
-//         }
-//         std::sort(neighbors.data(), neighbors.data() + neighbors.size());
-//         return neighbors;
-//     }
+    Eigen::Matrix<double, kN_BIRDS, 2> generate_initial_state()
+    {
+        std::uniform_real_distribution<double> starting_x{-kSTARTING_INTERVAL / 2, kSTARTING_INTERVAL / 2};
+        std::uniform_real_distribution<double> starting_y{kHEIGHT * (0.5f - kBOUND_OFFSET),
+                                                          kHEIGHT * (0.5f + kBOUND_OFFSET)};
+        Eigen::Matrix<double, kN_BIRDS, 2> starting_states;
+        starting_states.col(0) = starting_states.col(0).NullaryExpr([&]() { return starting_x(seed_); });
+        starting_states.col(1) = starting_states.col(1).NullaryExpr([&]() { return starting_y(seed_); });
+        return starting_states;
+    }
 
-//     Eigen::Matrix<double, 2 * n_birds, 2> flock_acceleration(
-//         Eigen::Ref<Eigen::Matrix<double, n_birds, 4, Eigen::RowMajor>> states)
-//     {
-//         Eigen::Matrix<double, n_birds, 2> acceleration_mat;
-//         Eigen::Vector<double, n_birds> closest_neighbors;
-//         Eigen::Matrix<double, 2 * n_birds, 2> packed_result;
+    /* left,right = 2*nbirds-1
+    split values = 2*nbirds
+    tree_idx = nbirds
+    dimension = 2*nbirds
+    sample indicies = kMEDIAN_TREE_SAMPLE            investigate size allocations
 
-//         auto positions{states.col(0)};
-//         auto velocities{states.col(1)};
-//         auto status{states.col(2).array()};
-//         double cm{ali / M};
-//         for (int i = 0; i < n_birds; ++i)
-//         {
-//             Eigen::Vector<double, M> m_set_indices{nearest_M(positions, i)};
-//             closest_neighbors(i) = m_set_indices(0);
-//             auto neighbor_positions{positions(m_set_indices).array()};
-//             auto neighbor_velocities{velocities(m_set_indices).array()};
-//             auto pos_diff{neighbor_positions - positions(i)};
-//             auto vel_diff{neighbor_velocities - velocities(i)};
-//             auto a_sum_1{((pos_diff.array()) / ((pos_diff).array().abs().square() + epsilon))};
-//             auto a_sum_2{(cm * (vel_diff) + att * (pos_diff))};
-//             double acceleration{-rep * a_sum_1.sum() + (1.0 - status(i)) * a_sum_2.sum()};
-//             acceleration_mat(i) = acceleration;
-//         }
-//         packed_result << acceleration_mat,
-//             closest_neighbors; // packing closest neighbors for persistence distance tracking
-//         return packed_result;
-//     }
-//     void shift_back() // shifts both maps
-//     {
-//         steps_back = (steps_back + 1) % (buffer_cycles + 1); // circular modulus
-//         double *new_address_states = full_states.data() + (steps_back * n_birds * 3);
-//         new (&states) Eigen::Map<Eigen::Matrix<double, n_birds, 3, Eigen::RowMajor>>(new_address_states, n_birds,
-//         3);
+    pool idx
+    start
+    end
+    */
+    void construct_tree(const Eigen::Ref<const Eigen::Matrix<double, kN_BIRDS, 2>> &positions)
+    {
+        std::iota(sample_indices_.begin(), sample_indices_.end(),
+                  0); // reset and initialize sample median proxy list, tree node indices
+        std::iota(tree_idx_.begin(), tree_idx_.end(), 0); // tree_idx is position proxy sort mask
+        pool_ticker_ = 1;                                 // set ticker (node counter) to first non-root node
+        tree_stack_.emplace_back(0, 0, kN_BIRDS);
 
-//         double *new_address_timers = timers.data() + (steps_back * n_birds * 2);
-//         new (&timer_states)
-//             Eigen::Map<Eigen::Matrix<double, n_birds, 2, Eigen::RowMajor>>(new_address_timers, n_birds, 2);
+        int count = 1;
 
-//         int delayed_steps = (steps_back + 1) % (buffer_cycles + 1);
-//         double *new_address_buffer = full_states.data() + delayed_steps * n_birds * 3;
-//         new (&buffer) Eigen::Map<Eigen::Matrix<double, n_birds, 3, Eigen::RowMajor>>(new_address_buffer, n_birds,
-//         3);
+        while (!tree_stack_.empty())
+        {
+            std::cout << "round: " << count << std::endl << "------" << std::endl;
+            Tree_task_ Task = tree_stack_.back();
+            tree_stack_.pop_back();
 
-//         double *new_address_timers_delay = timers.data() + delayed_steps * n_birds * 2;
-//         new (&timer_buffer)
-//             Eigen::Map<Eigen::Matrix<double, n_birds, 2, Eigen::RowMajor>>(new_address_timers_delay, n_birds, 2);
-//     }
+            int n_node_birds = Task.end - Task.start;
+            if (Task.end - Task.start <= kLEAF_SIZE)
+            {                                           // we directly calculate remaining leaf cluster using SIMD
+                left_idx_(Task.pool_idx) = -Task.start; // left/right_idx mark NODE indices
+                right_idx_(Task.pool_idx) = -Task.end;  // here, position indices used for sentinel?
+                continue;
+            }
+            // auto x_segment = positions.col(0).segment(Task.start, n_node_birds);
+            // auto y_segment = positions.col(1).segment(Task.start, n_node_birds);
 
-//     void update_state(Eigen::Ref<Eigen::Matrix<double, n_birds, 3, Eigen::RowMajor>> states)
-//     {
-//         auto acceleration_return{flock_acceleration(buffer)};
+            auto x_segment = positions.col(0)(tree_idx_.segment(Task.start, n_node_birds));
+            auto y_segment = positions.col(1)(tree_idx_.segment(Task.start, n_node_birds));
 
-//         for (int i = 0; i < n_birds; ++i)
-//         {
-//             // we use < or > 0.5 instead of == 1 to avoid floating point issues
+            dim_ = (std::abs(x_segment.maxCoeff() - x_segment.minCoeff()) > // PROFILE
+                    std::abs(y_segment.maxCoeff() - y_segment.minCoeff()))
+                       ? 0
+                       : 1;
+            dimensions_(Task.pool_idx) = dim_;
 
-//             if (states.col(2)[i] > 0.5 &&
-//                 timer_buffer.col(0)[i] < pt) // check if leaders should expire, assign refractory period
-//             {
-//                 buffer.col(2)[i] = 0;
-//                 timer_buffer.col(1)[i] = rt;
-//             }
-//             if (states.col(2)[i] > 0.5 && timer_states.col(0)[i] > 0) // decremet leaders' persistence time
-//                 timer_buffer.col(0)[i] -= timestep;
-//             if (states.col(2)[i] < 0.5 && timer_states.col(1)[i] > 0 &&
-//                 timer_states.col(1)[i] != rt) // decrement followers' refractory time who weren't just demoted
-//                 timer_buffer.col(1)[i] -= timestep;
-//             if (states.col(2)[i] < 0.5 &&
-//                 timer_states.col(1)[i] == 0) // followers without refractory time roll for leader
-//                 buffer.col(2)[i] = status(seed);
-//             if (buffer.col(2)[i] > 0.5 &&
-//                 states.col(2)[i] < 0.5) // assign new leaders persistence time if they werent one in previous
-//                 step timer_buffer.col(0)[i] = pt;
-//             if (states.col(2)[i] > 0.5) // propagate leaders to next state last
-//                 buffer.col(2)[i] = 1;
-//             if (states.col(2)[i] > 0.5 && acceleration_return(n_birds + i) > pd)
-//             { // demote leaders which stray too far
-//                 buffer.col(2)[i] = 0;
-//                 timer_buffer.col(1)[i] = rt;
-//             }
-//         }
-//         buffer.col(1) = states.col(1) + acceleration_return(Eigen::seq(0, n_birds - 1)) *
-//                                             timestep; //"future" position, will become present after shift
-//         buffer.col(0) = states.col(0) + states.col(1) * timestep;
-//         shift_back();
-//     }
-// };
+            int endpoint = std::min(kTREE_MEDIAN_SAMPLE, n_node_birds);
+            std::nth_element(
+                sample_indices_.begin(), sample_indices_.begin() + endpoint / 2, // repetitive sample (fixed?)
+                sample_indices_.begin() + endpoint, // sample_indices proxy sort mask of SUBSET of positions
+                [&](int i, int j) { return positions(Task.start + i, dim_) < positions(Task.start + j, dim_); });
+            int sample_median_idx = (sample_indices_.size() % 2 == 1) ? sample_indices_(sample_indices_.size() / 2 + 1)
+                                                                      : sample_indices_(sample_indices_.size() / 2);
+            std::cout << sample_indices_ << std::endl << "------" << std::endl;
+            std::cout << positions(sample_indices_, dim_) << std::endl << "------" << std::endl;
+            auto tree_midpoint_pointer = std::partition(
+                tree_idx_.begin() + Task.start,
+                tree_idx_.begin() + Task.end, // partition task segment of position mask based on positions
+                [&](int i) {
+                    return positions(i, dim_) < positions(sample_median_idx, dim_);
+                }); // indexes full positions using sample mask index
+            std::cout << tree_idx_ << "---------" << '\n';
+            int tree_midpoint_idx = std::distance(tree_idx_.begin(), tree_midpoint_pointer);
+            double split = positions(tree_midpoint_idx, dim_);
+
+            split_values_(Task.pool_idx) = positions(tree_midpoint_idx, dim_);
+            left_idx_(Task.pool_idx) = ++pool_ticker_; // assigning child NODES
+            tree_stack_.emplace_back(pool_ticker_, Task.start, tree_midpoint_idx);
+            right_idx_(Task.pool_idx) = ++pool_ticker_;
+            tree_stack_.emplace_back(pool_ticker_, tree_midpoint_idx, Task.end);
+            ++count;
+        }
+    }
+
+    // void flock_acceleration(Eigen::Ref<Eigen::Matrix<double, kN_BIRDS, 4>> states)
+    // {
+    //     // Eigen::internal::set_is_malloc_allowed(false);
+
+    //     auto positions{states.col(0)};
+    //     auto velocities{states.col(1)};
+    //     auto status_{states.col(2)};
+    //     double cm{kALI / kM};
+    //     for (int i = 0; i < kN_BIRDS; ++i)
+    //     {
+    //         kd_nearest_neighbors(positions, i);
+    //         closest_neighbors_(i) = neighbors_(0);
+    //         auto neighbor_positions{positions(neighbors_).array()};
+    //         auto neighbor_velocities{velocities(neighbors_).array()};
+    //         auto pos_diff{neighbor_positions - positions(i)};
+    //         auto vel_diff{neighbor_velocities - velocities(i)};
+    //         auto a_sum_1{((pos_diff.array()) / ((pos_diff).array().abs().square() + kEPSILON))};
+    //         auto a_sum_2{(cm * (vel_diff) + kATT * (pos_diff))};
+    //         double acceleration{-kREP * a_sum_1.sum() + (1.0 - status_(i)) * a_sum_2.sum()};
+    //         acceleration_vec_(i) = acceleration;
+    //     }
+    //     packed_result_ << acceleration_vec_,
+    //         closest_neighbors_; // packing closest neighbors for persistence distance tracking
+    //     // Eigen::internal::set_is_malloc_allowed(true);
+    // }
+
+    void shift_back() // shifts both maps, remapping is not a heap allocation!
+    {
+        steps_back_ = (steps_back_ + 1) % (kBUFFER_CYCLES + 1); // circular modulus
+        new_address_states_ = full_states.data() + (steps_back_ * kN_BIRDS * 4);
+        new (&states) Eigen::Map<Eigen::Matrix<double, kN_BIRDS, 4>>(new_address_states_, kN_BIRDS, 4);
+
+        double *new_address_timers = timers.data() + (steps_back_ * kN_BIRDS * 2);
+        new (&timer_states) Eigen::Map<Eigen::Matrix<double, kN_BIRDS, 2>>(new_address_timers, kN_BIRDS, 2);
+
+        delayed_steps_ = (steps_back_ + 1) % (kBUFFER_CYCLES + 1);
+        new_address_buffer_ = full_states.data() + delayed_steps_ * kN_BIRDS * 4;
+        new (&buffer) Eigen::Map<Eigen::Matrix<double, kN_BIRDS, 4>>(new_address_buffer_, kN_BIRDS, 4);
+
+        double *new_address_timers_delay = timers.data() + delayed_steps_ * kN_BIRDS * 2;
+        new (&timer_buffer) Eigen::Map<Eigen::Matrix<double, kN_BIRDS, 2>>(new_address_timers_delay, kN_BIRDS, 2);
+    }
+
+    // void update_state(Eigen::Ref<Eigen::Matrix<double, kN_BIRDS, 4>> states)
+    // {
+    //     flock_acceleration(buffer);
+
+    //     for (int i = 0; i < kN_BIRDS; ++i)
+    //     {
+    //         bool is_leader = states.col(2)[i] > 0.5;
+    //         double dist_to_neighbor = std::abs(states.col(0)[i] - states.col(0)[packed_result_(kN_BIRDS + i)]);
+
+    //         if (is_leader)
+    //         {
+    //             // LEADER LOGIC
+    //             bool expired = timer_states.col(0)[i] <= 0;
+    //             bool strayed = dist_to_neighbor > kPD;
+
+    //             if (expired || strayed)
+    //             {
+    //                 // DEMOTE
+    //                 buffer.col(2)[i] = 0;
+    //                 timer_buffer.col(1)[i] = kRT;
+    //                 timer_buffer.col(0)[i] = 0;
+    //             }
+    //             else
+    //             {
+    //                 // REMAIN LEADER
+    //                 buffer.col(2)[i] = 1;
+    //                 if (timer_states.col(0)[i] > 0)
+    //                     timer_buffer.col(0)[i] = timer_states.col(0)[i] - kTIMESTEP;
+    //             }
+    //         }
+    //         else
+    //         {
+    //             // FOLLOWER LOGIC
+    //             if (timer_states.col(1)[i] > 0)
+    //             {
+    //                 // REFRACTORY PERIOD
+    //                 timer_buffer.col(1)[i] = std::max(0.0, timer_states.col(1)[i] - kTIMESTEP);
+    //                 buffer.col(2)[i] = 0;
+    //             }
+    //             else
+    //             {
+    //                 // ELIGIBLE FOR PROMOTION
+    //                 double roll = status_(seed_);
+    //                 buffer.col(2)[i] = roll;
+    //                 if (roll > 0.5)
+    //                 {
+    //                     timer_buffer.col(0)[i] = kPT; // Assign persistence
+    //                 }
+    //             }
+    //         }
+    //     }
+    //     buffer.col(1) = states.col(1) + packed_result_(Eigen::seq(0, kN_BIRDS - 1)) *
+    //                                         kTIMESTEP; //"future" position, will become present after shift
+    //     buffer.col(0) = states.col(0) + states.col(1) * kTIMESTEP;
+    // }
+};
