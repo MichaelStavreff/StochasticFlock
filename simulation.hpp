@@ -211,12 +211,12 @@ class Simulation2d
     Eigen::Vector<double, kN_BIRDS> acceleration_vec_;
     Eigen::Vector<double, kN_BIRDS> closest_neighbors_;
     Eigen::Vector<double, 2 * kN_BIRDS> packed_result_;
-    Eigen::Vector<std::int32_t, 2 * kN_BIRDS - 1> left_idx_;
-    Eigen::Vector<std::int32_t, 2 * kN_BIRDS - 1> right_idx_;
-    Eigen::Vector<float, 2 * kN_BIRDS - 1> split_values_;
+    Eigen::Vector<std::int32_t, 2 * kN_BIRDS> left_idx_;
+    Eigen::Vector<std::int32_t, 2 * kN_BIRDS> right_idx_;
+    Eigen::Vector<float, 2 * kN_BIRDS> split_values_;
     Eigen::Vector<int, kN_BIRDS> tree_idx_;
 
-    Eigen::Vector<std::uint8_t, 2 * kN_BIRDS - 1> dimensions_;
+    Eigen::Vector<std::uint8_t, 2 * kN_BIRDS> dimensions_;
     Eigen::Vector<int, kM> neighbors_;
     Eigen::Vector<std::uint8_t, kTREE_MEDIAN_SAMPLE> sample_indices_; // small sample of values for median
 
@@ -243,9 +243,9 @@ class Simulation2d
     int pool_ticker_{};
 
   public:
-    Simulation2d(std::mt19937 &seed)
+    Simulation2d(std::mt19937 &mt)
         : states(full_states.topRows(kN_BIRDS).data()), buffer(full_states.topRows(kN_BIRDS).data()),
-          timer_states(timers.topRows(kN_BIRDS).data()), timer_buffer(timers.topRows(kN_BIRDS).data()), seed_(seed)
+          timer_states(timers.topRows(kN_BIRDS).data()), timer_buffer(timers.topRows(kN_BIRDS).data()), seed_(mt)
     {
         Eigen::Matrix<double, kN_BIRDS, 2> positions{generate_initial_state()};
         y_states = positions.col(1);
@@ -275,7 +275,7 @@ class Simulation2d
         return starting_states;
     }
 
-    /* left,right = 2*nbirds-1
+    /* left idx,right idx = 2*nbirds
     split values = 2*nbirds
     tree_idx = nbirds
     dimension = 2*nbirds
@@ -290,8 +290,8 @@ class Simulation2d
         std::iota(sample_indices_.begin(), sample_indices_.end(),
                   0); // reset and initialize sample median proxy list, tree node indices
         std::iota(tree_idx_.begin(), tree_idx_.end(), 0); // tree_idx is position proxy sort mask
-        pool_ticker_ = 1;                                 // set ticker (node counter) to first non-root node
-        tree_stack_.emplace_back(0, 0, kN_BIRDS);
+        pool_ticker_ = 0;                                 // set ticker (node counter) to first non-root node??
+        tree_stack_.emplace_back(pool_ticker_, 0, kN_BIRDS);
 
         int count = 1;
 
@@ -302,7 +302,7 @@ class Simulation2d
             tree_stack_.pop_back();
 
             int n_node_birds = Task.end - Task.start;
-            if (Task.end - Task.start <= kLEAF_SIZE)
+            if (n_node_birds <= kLEAF_SIZE)
             {                                           // we directly calculate remaining leaf cluster using SIMD
                 left_idx_(Task.pool_idx) = -Task.start; // left/right_idx mark NODE indices
                 right_idx_(Task.pool_idx) = -Task.end;  // here, position indices used for sentinel?
@@ -311,8 +311,8 @@ class Simulation2d
             // auto x_segment = positions.col(0).segment(Task.start, n_node_birds);
             // auto y_segment = positions.col(1).segment(Task.start, n_node_birds);
 
-            auto x_segment = positions.col(0)(tree_idx_.segment(Task.start, n_node_birds));
-            auto y_segment = positions.col(1)(tree_idx_.segment(Task.start, n_node_birds));
+            auto x_segment = positions.col(0)(tree_idx_.segment(Task.start, n_node_birds)).eval();
+            auto y_segment = positions.col(1)(tree_idx_.segment(Task.start, n_node_birds)).eval();
 
             dim_ = (std::abs(x_segment.maxCoeff() - x_segment.minCoeff()) > // PROFILE
                     std::abs(y_segment.maxCoeff() - y_segment.minCoeff()))
@@ -321,10 +321,12 @@ class Simulation2d
             dimensions_(Task.pool_idx) = dim_;
 
             int endpoint = std::min(kTREE_MEDIAN_SAMPLE, n_node_birds);
-            std::nth_element(
-                sample_indices_.begin(), sample_indices_.begin() + endpoint / 2, // repetitive sample (fixed?)
-                sample_indices_.begin() + endpoint, // sample_indices proxy sort mask of SUBSET of positions
-                [&](int i, int j) { return positions(Task.start + i, dim_) < positions(Task.start + j, dim_); });
+            std::nth_element(sample_indices_.begin(), sample_indices_.begin() + endpoint / 2,
+                             sample_indices_.begin() +
+                                 endpoint, // sample_indices proxy sort mask of SUBSET of positions
+                             [&](int i, int j) {
+                                 return positions(Task.start + i, dim_) < positions(Task.start + j, dim_);
+                             }); // issue
             int sample_median_idx = (sample_indices_.size() % 2 == 1) ? sample_indices_(sample_indices_.size() / 2 + 1)
                                                                       : sample_indices_(sample_indices_.size() / 2);
             std::cout << sample_indices_ << std::endl << "------" << std::endl;
@@ -335,15 +337,15 @@ class Simulation2d
                 [&](int i) {
                     return positions(i, dim_) < positions(sample_median_idx, dim_);
                 }); // indexes full positions using sample mask index
-            std::cout << tree_idx_ << "---------" << '\n';
-            int tree_midpoint_idx = std::distance(tree_idx_.begin(), tree_midpoint_pointer);
-            double split = positions(tree_midpoint_idx, dim_);
+            std::cout << tree_idx_ << std::endl << "---------" << std::endl;
+            int tree_midpoint_offset = std::distance(tree_idx_.begin() + Task.start, tree_midpoint_pointer);
+            double split = positions(tree_midpoint_offset, dim_);
 
-            split_values_(Task.pool_idx) = positions(tree_midpoint_idx, dim_);
+            split_values_(Task.pool_idx) = split;
             left_idx_(Task.pool_idx) = ++pool_ticker_; // assigning child NODES
-            tree_stack_.emplace_back(pool_ticker_, Task.start, tree_midpoint_idx);
+            tree_stack_.emplace_back(pool_ticker_, Task.start, Task.start + tree_midpoint_offset);
             right_idx_(Task.pool_idx) = ++pool_ticker_;
-            tree_stack_.emplace_back(pool_ticker_, tree_midpoint_idx, Task.end);
+            tree_stack_.emplace_back(pool_ticker_, Task.start + tree_midpoint_offset + 1, Task.end);
             ++count;
         }
     }

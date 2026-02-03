@@ -3,9 +3,9 @@
 inline constexpr int kN_BIRDS{100};
 inline constexpr int kM{6};                   // bird set size,        7
 inline constexpr double kDELAY{0.1};          // delay,                0.1
-inline constexpr double kPT{60};             // persistence time,     700
+inline constexpr double kPT{60};              // persistence time,     700
 inline constexpr double kPD{150};             // persistence distance, 20
-inline constexpr double kRT{60};             // refractory time,      800
+inline constexpr double kRT{60};              // refractory time,      800
 inline constexpr double kREP{0.5};            // repulsion force,      2.5
 inline constexpr double kALI{0.05};           // alignment force,      3
 inline constexpr double kATT{0.15};           // attraction force,     0.01
