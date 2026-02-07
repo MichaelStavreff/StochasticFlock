@@ -17,8 +17,8 @@ inline constexpr int kBUFFER_CYCLES{static_cast<int>(kDELAY / kTIMESTEP)};
 inline constexpr int kFRAMERATE{60};
 inline constexpr int kROUNDS{10000};
 // Higher dimensional parameters
-inline constexpr int kTREE_MEDIAN_SAMPLE{30};
-inline constexpr int kLEAF_SIZE{16};
+inline constexpr int kTREE_MEDIAN_SAMPLE{30}; // could profile
+inline constexpr int kLEAF_SIZE{16};          // double once using floats to fit SIMD registers better, could profile
 // 1D window
 inline constexpr float kWIDTH{2200};
 inline constexpr float kHEIGHT{400};

@@ -30,5 +30,7 @@ int main()
     my_positions.col(1) = Eigen::Vector<double, kN_BIRDS>::NullaryExpr(kN_BIRDS, [&]() { return dist(mt); });
     std::cout << my_positions << std::endl;
     Sim.construct_tree(my_positions);
+    std::cout << Sim.left_idx_;
+    std::cout << Sim.right_idx_;
     // init_simulation(Sim);
 }
