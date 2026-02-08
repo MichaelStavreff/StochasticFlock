@@ -205,11 +205,13 @@ class Simulation2d
     Eigen::Map<Eigen::Matrix<double, kN_BIRDS, 4>> buffer;
     Eigen::Map<Eigen::Matrix<double, kN_BIRDS, 2>> timer_states;
     Eigen::Map<Eigen::Matrix<double, kN_BIRDS, 2>> timer_buffer;
+    Eigen::Matrix<double, kN_BIRDS, 2> proxy_positions_;
     Eigen::Vector<double, kN_BIRDS> y_states;
     Eigen::Vector<int, kN_BIRDS> tree_idx_;               // move back to private once finished
     Eigen::Vector<std::int32_t, 2 * kN_BIRDS> left_idx_;  // move back to private once finished
     Eigen::Vector<std::int32_t, 2 * kN_BIRDS> right_idx_; // move back to private once finished
     std::array<int, kN_BIRDS> traversal_stack_;           // move back to private once finished
+    Eigen::Vector<int, kN_BIRDS> inverse_idx_;
 
   private:
     Eigen::Vector<double, kN_BIRDS> acceleration_vec_;
@@ -221,6 +223,7 @@ class Simulation2d
     Eigen::Vector<std::uint8_t, 2 * kN_BIRDS> dimensions_;
     Eigen::Vector<double, kLEAF_SIZE> squared_distances_;
     Eigen::Vector<int, kM> neighbors_;
+    Eigen::Vector<double, kM> persistent_neighbors_dist_;
     Eigen::Vector<std::uint8_t, kTREE_MEDIAN_SAMPLE> sample_indices_; // small sample of values for median
 
     struct Tree_task_
@@ -238,6 +241,7 @@ class Simulation2d
     double rate_{kPROBABILITY / kTIMESTEP};
     std::bernoulli_distribution status_{rate_ * kTIMESTEP};
     double target_val_;
+    double backtrace_sqr_radius_;
     double *new_address_states_;
     double *new_address_buffer_;
     int steps_back_{};
@@ -277,7 +281,38 @@ class Simulation2d
         starting_states.col(1) = starting_states.col(1).NullaryExpr([&]() { return starting_y(seed_); });
         return starting_states;
     }
+    void debug_print_tree(int i = 0, int indent = 0)
+    {
+        if (i == -1)
+            return; // Empty node
 
+        // Print indentation
+        for (int j = 0; j < indent; ++j)
+            std::cout << "  ";
+
+        if (left_idx_(i) < 0)
+        {
+            // This is a Leaf
+            int task_pos = -left_idx_(i) - 1; // undo offset
+            int task_n = -right_idx_(i);
+            std::cout << "[LEAF] pos: " << task_pos << " count: " << task_n << " (IDs: ";
+            for (int k = 0; k < task_n; ++k)
+            {
+                std::cout << tree_idx_(task_pos + k) << (k == task_n - 1 ? "" : ", ");
+            }
+            std::cout << ")" << std::endl;
+        }
+        else
+        {
+            // This is an Internal Node
+            std::cout << "[NODE " << i << "] Split Dim: " << (int)dimensions_(i) << " Value: " << split_values_(i)
+                      << std::endl;
+
+            // Recurse
+            debug_print_tree(left_idx_(i), indent + 1);
+            debug_print_tree(right_idx_(i), indent + 1);
+        }
+    }
     /* left idx,right idx = 2*nbirds
     split values = 2*nbirds
     tree_idx = nbirds
@@ -338,80 +373,131 @@ class Simulation2d
             else if (tree_midpoint_offset == n_node_birds)
                 --tree_midpoint_offset;
 
-            double split = positions(tree_midpoint_offset, dim_);
+            double split = positions(sample_median_idx, dim_);
             split_values_(Task.pool_idx) = split;
             left_idx_(Task.pool_idx) = ++pool_ticker_;
             tree_stack_.emplace_back(pool_ticker_, Task.start, Task.start + tree_midpoint_offset);
             right_idx_(Task.pool_idx) = ++pool_ticker_;
             tree_stack_.emplace_back(pool_ticker_, Task.start + tree_midpoint_offset, Task.end);
             ++count;
+            if (pool_ticker_ > dimensions_.size())
+                std::cout << "ticker too big: " << pool_ticker_ << std::endl;
         }
+        // populate proxy position matrix for traversal
+        for (int k{}; auto bird : tree_idx_)
+        {
+            proxy_positions_.col(0)(k) = positions.col(0)(bird);
+            proxy_positions_.col(1)(k) = positions.col(1)(bird);
+            ++k;
+        }
+        // inverse lookup for bird_idx in traversal
+        for (int i = 0; i < kN_BIRDS; ++i)
+            inverse_idx_[tree_idx_[i]] = i;
+        debug_print_tree();
     }
+    void traverse_backtrace(const Eigen::Ref<const Eigen::Matrix<double, kN_BIRDS, 2>> &positions, int pos_bird_idx)
+    {
+        int proxy_bird_idx = inverse_idx_(pos_bird_idx);
+        double target_x = proxy_positions_(proxy_bird_idx, 0);
+        double target_y = proxy_positions_(proxy_bird_idx, 1);
 
-    void traverse_backtrace(const Eigen::Ref<const Eigen::Matrix<double, kN_BIRDS, 2>> &positions, int bird_idx)
-    {
-        int i{0};
-        int stack_counter{0};
-        std::for_each(
-            bird_dimensions_positions_unroll_.begin(), bird_dimensions_positions_unroll_.begin() + kN_BIRDS,
-            [&](int k) { return positions(bird_idx, dimensions_(k)); }); // front-load alternating position lookups,
-        // CHECK efficiency
-        while (left_idx_(i) > 0)
-        {
-            double bird_coord{bird_dimensions_positions_unroll_(i)};
-            traversal_stack_[stack_counter] = i;
-            if (bird_coord < split_values_(i))
-                i = left_idx_(i);
-            else
-                i = right_idx_(i);
-            ++stack_counter;
-        }
-        if constexpr (kLEAF_SIZE > kM)
-        {
-            // bruteforce leaf birds with SIMD
-            int task_pos{-left_idx_(i)};
-            int task_n{-right_idx_(i)};
-            std::iota(neighbors_.begin(), neighbors_.end(), task_pos);
-            squared_distances_
-                << ((positions.col(0).segment(task_pos, task_n).array() - positions(bird_idx, 0)).array().square() +
-                    (positions.col(1).segment(task_pos, task_n).array() - positions(bird_idx, 1)).array().square());
-            std::sort(neighbors_.begin(), neighbors_.end(),
-                      [&](int i, int j) { return squared_distances_(i - task_n) < squared_distances_(j - task_n); });
-            double backtrace_sqr_radius{
-                (positions.row(bird_idx) - positions.row(task_pos + neighbors_.tail(1)(0))).squaredNorm()};
-            while (stack_counter > 0)
-            {
-                int parent_node = traversal_stack_[stack_counter];
-                double diff{std::abs(split_values_(parent_node) - positions(bird_idx, dimensions_(parent_node)))};
-                if (diff * diff > backtrace_sqr_radius)
-                {
-                    --stack_counter;
-                    continue;
-                }
-                else
-                {
-                    while (left_idx_(traversal_stack_[stack_counter]) > i) // here im confused
-                }
-            }
-        }
-        else
-        {
-            // something...
-        }
-    }
-    void traverse_backtrace(...)
-    {
-        // ... (Your existing downward pass) ...
+        neighbors_.setConstant(-1);
+        persistent_neighbors_dist_.setConstant(std::numeric_limits<double>::max());
+        backtrace_sqr_radius_ = std::numeric_limits<double>::max();
+        int neighbors_found = 0;
+
+        int i = 0;
+        int stack_counter = 0;
 
         while (true)
         {
-            // --- PHASE 1: DESCEND ---
-            while (left_idx_(i) > 0)
+            while (left_idx_(i) >= 0)
             {
                 traversal_stack_[stack_counter++] = i;
-                int d = dimensions_(i);
-                // Move toward the query point
-                if (positions(bird_idx, d) < split_values_(i))
+                int dim = (int)dimensions_(i);
+                double val = (dim == 0) ? target_x : target_y;
+
+                if (val < split_values_(i))
+                    i = left_idx_(i);
+                else
+                    i = right_idx_(i);
+            }
+
+            int task_pos = (-left_idx_(i)) - 1; // Decode sentinel to get starting position in proxy matrix
+            int task_n = -right_idx_(i);
+
+            squared_distances_.head(task_n) =
+                (proxy_positions_.col(0).segment(task_pos, task_n).array() - target_x).square() +
+                (proxy_positions_.col(1).segment(task_pos, task_n).array() - target_y).square();
+
+            for (int j = 0; j < task_n; ++j)
+            {
+                double d2 = squared_distances_(j);
+
+                // Check if bird qualifies for the top K (kM) neighbors
+                if (neighbors_found < kM || d2 < backtrace_sqr_radius_)
+                {
+                    int global_proxy_idx = task_pos + j;
+
+                    int curr = (neighbors_found < kM) ? neighbors_found : (kM - 1);
+
+                    if (neighbors_found == kM && d2 >= persistent_neighbors_dist_(kM - 1))
+                        continue;
+
+                    while (curr > 0 && d2 < persistent_neighbors_dist_(curr - 1))
+                    {
+                        persistent_neighbors_dist_(curr) = persistent_neighbors_dist_(curr - 1);
+                        neighbors_(curr) = neighbors_(curr - 1);
+                        --curr;
+                    }
+
+                    persistent_neighbors_dist_(curr) = d2;
+                    neighbors_(curr) = global_proxy_idx;
+
+                    if (neighbors_found < kM)
+                        neighbors_found++;
+
+                    backtrace_sqr_radius_ = persistent_neighbors_dist_(neighbors_found - 1);
+                }
+            }
+
+            bool found_sibling = false;
+            while (stack_counter > 0)
+            {
+                int parent = traversal_stack_[--stack_counter];
+                int dim = (int)dimensions_(parent);
+                double val = (dim == 0) ? target_x : target_y;
+
+                double diff = val - split_values_(parent);
+                double diff2 = diff * diff;
+
+                if (neighbors_found < kM || diff2 < backtrace_sqr_radius_ / kAPPROX_PRUNE_FACTOR)
+                {
+                    i = (val < split_values_(parent)) ? right_idx_(parent) : left_idx_(parent);
+                    found_sibling = true;
+                    break;
+                }
+            }
+
+            if (!found_sibling)
+                break;
+        }
+    }
+    void traverse_backtrace2(const Eigen::Ref<const Eigen::Matrix<double, kN_BIRDS, 2>> &positions, int pos_bird_idx)
+    {
+        int proxy_bird_idx{inverse_idx_(pos_bird_idx)};
+        bool first_iter{true};
+
+        int i{0};
+        int stack_counter{0};
+        while (true)
+        {
+            bool found_sibling = false;
+            while (left_idx_(i) > 0)
+            {
+                traversal_stack_[stack_counter] = i;
+                ++stack_counter;
+                if (proxy_positions_(proxy_bird_idx, dimensions_(i)) < split_values_(i))
                 {
                     i = left_idx_(i);
                 }
@@ -420,40 +506,185 @@ class Simulation2d
                     i = right_idx_(i);
                 }
             }
+            if (left_idx_(i) < 0)
+            {
+                int start_idx = (-left_idx_(i)) - 1;
+                int count = -right_idx_(i);
+                std::cout << "Searching Leaf: Start=" << start_idx << " Count=" << count << " IDs: ";
+                for (int i = 0; i < count; ++i)
+                    std::cout << tree_idx_(start_idx + i) << " ";
+                std::cout << std::endl;
+            }
 
-            // --- PHASE 2: LEAF PROCESSING ---
-            // (Your SIMD leaf logic goes here)
-            // Update backtrace_sqr_radius here...
+            // bruteforce leaf birds with SIMD
+            int task_pos{-left_idx_(i) - 1}; // undoing offset from construction
+            int task_n{-right_idx_(i)};
 
-            // --- PHASE 3: BACKTRACK & PRUNE ---
-            bool found_sibling = false;
+            squared_distances_.head(task_n) =
+                (proxy_positions_.col(0).segment(task_pos, task_n).array() - proxy_positions_(proxy_bird_idx, 0))
+                    .square() +
+                (proxy_positions_.col(1).segment(task_pos, task_n).array() - proxy_positions_(proxy_bird_idx, 1))
+                    .square();
+            if (first_iter) // branch predicted away
+            {
+                persistent_neighbors_dist_.setConstant(std::numeric_limits<double>::max());
+                neighbors_.setConstant(-1);
+
+                int num_to_fill = std::min((int)neighbors_.size(), task_n);
+
+                for (int j = 0; j < num_to_fill; ++j)
+                {
+                    neighbors_(j) = task_pos + j;
+                    persistent_neighbors_dist_(j) = squared_distances_(j);
+                }
+
+                std::sort(neighbors_.begin(), neighbors_.begin() + num_to_fill, [&](int a, int b) {
+                    return squared_distances_(a - task_pos) < squared_distances_(b - task_pos);
+                });
+
+                for (int j = 0; j < num_to_fill; ++j)
+                {
+                    persistent_neighbors_dist_(j) = squared_distances_(neighbors_(j) - task_pos);
+                }
+
+                backtrace_sqr_radius_ = persistent_neighbors_dist_(neighbors_.size() - 1);
+
+                first_iter = false;
+            }
+            else
+            {
+                for (int j = 0; j < task_n; ++j)
+                {
+                    double bird_distance = squared_distances_(j);
+                    int global_proxy_idx = task_pos + j;
+
+                    if (bird_distance < backtrace_sqr_radius_)
+                    {
+                        int curr = neighbors_.size() - 1;
+                        neighbors_(curr) = global_proxy_idx;
+                        persistent_neighbors_dist_(curr) = bird_distance;
+
+                        // Bubble up (Insertion sort step)
+                        while (curr > 0 && persistent_neighbors_dist_(curr) < persistent_neighbors_dist_(curr - 1))
+                        {
+                            std::swap(neighbors_(curr), neighbors_(curr - 1));
+                            std::swap(persistent_neighbors_dist_(curr), persistent_neighbors_dist_(curr - 1));
+                            curr--;
+                        }
+                        backtrace_sqr_radius_ = persistent_neighbors_dist_.tail(1)(0);
+                    }
+                }
+            }
             while (stack_counter > 0)
             {
                 int parent = traversal_stack_[--stack_counter];
-                int d = dimensions_(parent);
-                double diff = positions(bird_idx, d) - split_values_(parent);
+                double diff = proxy_positions_(proxy_bird_idx, dimensions_(parent)) - split_values_(parent);
 
-                // Can we prune the sibling?
-                if (diff * diff < backtrace_sqr_radius)
+                if (diff * diff <= backtrace_sqr_radius_)
                 {
-                    // NO: We must visit the sibling
-                    int sibling =
-                        (positions(bird_idx, d) < split_values_(parent)) ? right_idx_(parent) : left_idx_(parent);
+                    int sibling = (proxy_positions_(proxy_bird_idx, dimensions_(parent)) < split_values_(parent))
+                                      ? right_idx_(parent)
+                                      : left_idx_(parent);
 
-                    // IMPORTANT: Only visit sibling if we haven't just come from it
-                    // In this manual version, we simply set i to sibling and break to Phase 1
+                    // only visit sibling if we haven't just come from it
+                    // in this version, we simply set i to sibling and break to phase 1
                     i = sibling;
                     found_sibling = true;
                     break;
                 }
-                // YES: Prune it and keep climbing (next iteration of backtrack while)
+                // else continue
             }
 
             if (!found_sibling)
-                break; // We climbed to the root and found nothing else
+                break;
         }
     }
+    std::vector<int> get_brute_force_neighbors(const Eigen::MatrixXd &positions, int target_idx, int k)
+    {
+        struct DistId
+        {
+            double dist_sq;
+            int id;
+        };
+        std::vector<DistId> all_distances;
 
+        Eigen::Vector2d target_pos = positions.row(target_idx);
+
+        for (int i = 0; i < positions.rows(); ++i)
+        {
+            // Optional: skip self if your KD-tree skips self
+            // if (i == target_idx) continue;
+
+            double d2 = (positions.row(i) - target_pos.transpose()).squaredNorm();
+            all_distances.push_back({d2, i});
+        }
+
+        // Sort by distance
+        std::sort(all_distances.begin(), all_distances.end(),
+                  [](const DistId &a, const DistId &b) { return a.dist_sq < b.dist_sq; });
+
+        // Return the top K IDs
+        std::vector<int> result;
+        for (int i = 0; i < k && i < all_distances.size(); ++i)
+        {
+            result.push_back(all_distances[i].id);
+        }
+        return result;
+    }
+
+    void run_integrity_check(int num_tests, Eigen::Matrix<double, kN_BIRDS, 2> positions, std::mt19937 seed)
+    {
+        std::uniform_int_distribution<> dist(0, kN_BIRDS);
+        for (int t = 0; t < num_tests; ++t)
+        {
+            int test_bird{dist(seed)};
+            // 1. Run your optimized traversal
+            this->traverse_backtrace(positions, test_bird);
+
+            // 2. Convert your neighbors_ (Proxy IDs) to Original IDs
+            std::vector<int> kd_results;
+            for (int i = 0; i < neighbors_.size(); ++i)
+            {
+                kd_results.push_back(tree_idx_(neighbors_(i)));
+            }
+            std::sort(kd_results.begin(), kd_results.end());
+
+            // 3. Get Brute Force results
+            std::vector<int> brute_results = get_brute_force_neighbors(positions, test_bird, kM);
+            std::sort(brute_results.begin(), brute_results.end());
+
+            // 4. Compare
+            bool match = true;
+            if (kd_results.size() != brute_results.size())
+            {
+                match = false;
+            }
+            else
+            {
+                for (int i = 0; i < kd_results.size(); ++i)
+                {
+                    if (kd_results[i] != brute_results[i])
+                        match = false;
+                }
+            }
+
+            if (!match)
+            {
+                std::cout << "CRITICAL FAILURE at Bird " << test_bird << std::endl;
+                std::cout << "KD IDs: ";
+                for (int id : kd_results)
+                    std::cout << id << " ";
+                std::cout << "\nBrute IDs: ";
+                for (int id : brute_results)
+                    std::cout << id << " ";
+                std::cout << "\n";
+            }
+            else
+            {
+                std::cout << "Test " << t << " passed (Bird " << test_bird << ")\n";
+            }
+        }
+    }
     // void flock_acceleration(Eigen::Ref<Eigen::Matrix<double, kN_BIRDS, 4>> states)
     // {
     //     // Eigen::internal::set_is_malloc_allowed(false);
