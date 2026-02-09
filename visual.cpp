@@ -10,6 +10,7 @@
 #include "simulation.hpp"
 
 class Simulation1d;
+class Simulation2d;
 // struct Simulation2d;
 
 sf::Font loadFont(std::string filename)
@@ -113,9 +114,7 @@ void init_simulation(Simulation1d &simulation)
         ++iterations;
     }
 }
-
 void init_simulation(Simulation2d &simulation)
-
 {
     int iterations{};
     sf::Font font{loadFont("fonts/verdana.ttf")};
@@ -126,32 +125,25 @@ void init_simulation(Simulation2d &simulation)
     stats.setPosition(kWIDTH_2D * 0.90, 0);
     title.setFont(font);
     title.setCharacterSize(10);
-    title.setString("StochasticFlock");
+    title.setString("StochasticFlock 2D");
     title.setPosition(0, kHEIGHT_2D * 0.97);
 
-    sf::VertexArray plot_birds(sf::Points, kN_BIRDS);
+    sf::VertexArray plot_birds(sf::Quads, kN_BIRDS * 4);
 
-    Eigen::Matrix<float, kN_BIRDS, 2, Eigen::RowMajor> starting_positions{simulation.states.leftCols(2).cast<float>()};
-
-    sf::RenderWindow window(sf::VideoMode(kWIDTH_2D, kHEIGHT_2D), "StochasticFlock");
+    sf::RenderWindow window(sf::VideoMode(kWIDTH_2D, kHEIGHT_2D), "StochasticFlock 2D");
     window.setFramerateLimit(kFRAMERATE);
 
-    for (int i{0}; i < kN_BIRDS; ++i)
-    {
-        plot_birds[i].position = sf::Vector2f(kWIDTH / 2 + starting_positions(i, 0), starting_positions(i, 1));
-    }
-
+    // Axis and box setup
     sf::VertexArray x_axis(sf::Lines, 2);
     sf::VertexArray y_axis(sf::Lines, 2);
-    sf::RectangleShape square(sf::Vector2f(0.f, 0.f));
+    x_axis[0].position = sf::Vector2f(0.f, kHEIGHT_2D * 0.5f);
+    x_axis[1].position = sf::Vector2f(kWIDTH_2D, kHEIGHT_2D * 0.5f);
+    y_axis[0].position = sf::Vector2f(kWIDTH_2D / 2.f, 0.f);
+    y_axis[1].position = sf::Vector2f(kWIDTH_2D / 2.f, kHEIGHT_2D);
 
-    x_axis[0].position = sf::Vector2f(0.f, kHEIGHT_2D * 0.5);
-    x_axis[1].position = sf::Vector2f(kWIDTH_2D, kHEIGHT_2D * 0.5);
-    y_axis[0].position = sf::Vector2f(kWIDTH_2D / 2, 0.f);
-    y_axis[1].position = sf::Vector2f(kWIDTH_2D / 2, kHEIGHT_2D);
-    square.setSize(sf::Vector2f(kBOX_SIZE, kBOX_SIZE));
-    square.setPosition(sf::Vector2f(kWIDTH_2D * 0.5 - kBOX_SIZE * 0.5, kHEIGHT_2D * 0.5 - kBOX_SIZE * 0.5));
-    square.setFillColor(sf::Color::Black);
+    sf::RectangleShape square(sf::Vector2f(kBOX_SIZE, kBOX_SIZE));
+    square.setPosition(sf::Vector2f(kWIDTH_2D * 0.5f - kBOX_SIZE * 0.5f, kHEIGHT_2D * 0.5f - kBOX_SIZE * 0.5f));
+    square.setFillColor(sf::Color::Transparent); // Changed to transparent to see birds inside
     square.setOutlineThickness(1.f);
     square.setOutlineColor(sf::Color(92, 179, 219));
 
@@ -163,25 +155,34 @@ void init_simulation(Simulation2d &simulation)
             if (event.type == sf::Event::Closed)
                 window.close();
         }
-        // if (simulation.dimensions==1) {
+
         simulation.update_state(simulation.states);
 
         for (int i = 0; i < kN_BIRDS; ++i)
         {
-            float x_pos = static_cast<float>(kWIDTH_2D / 2 + starting_positions(i, 0));
-            float y_pos = static_cast<float>(kHEIGHT_2D / 2 + starting_positions(i, 1));
+            int v = i * 4;
+            float x_pos = static_cast<float>(kWIDTH_2D / 2.0f + simulation.states(i, 0));
+            float y_pos = static_cast<float>(kHEIGHT_2D / 2.0f + simulation.states(i, 1));
 
-            plot_birds[i].position = sf::Vector2f(x_pos, y_pos);
+            float size = 2.0f;
+            sf::Color birdColor = sf::Color::White;
 
-            if (simulation.states(i, 2) == 1.0)
+            if (simulation.states(i, 4) > 0.5)
             {
-                plot_birds[i].color = sf::Color::Yellow; // Leaders
+                birdColor = sf::Color::Yellow;
+                size = 5.0f; // Make leaders slightly bigger
             }
-            else
-            {
-                plot_birds[i].color = sf::Color::White; // Followers
-            }
+
+            plot_birds[v + 0].position = sf::Vector2f(x_pos, y_pos);
+            plot_birds[v + 1].position = sf::Vector2f(x_pos + size, y_pos);
+            plot_birds[v + 2].position = sf::Vector2f(x_pos + size, y_pos + size);
+            plot_birds[v + 3].position = sf::Vector2f(x_pos, y_pos + size);
+
+            for (int j = 0; j < 4; ++j)
+                plot_birds[v + j].color = birdColor;
         }
+
+        simulation.shift_back();
 
         window.clear(sf::Color::Black);
         stats.setString(std::format("n={}\nIter: {}", kN_BIRDS, iterations));
