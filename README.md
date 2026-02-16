@@ -67,8 +67,8 @@ pip install stochastic_flock
 For local development, after running make, you can import the module directly in the root directory:
 
 ```Python
-import stochastic_flock
-sim = stochastic_flock.Simulation2d(params, seed)
+>>> import stochastic_flock
+>>> sim = stochastic_flock.Simulation2d(params, seed)
 ```
 ## Introduction
 Financial markets have famously exhibited flocking or herding behavior, most famously during crises and impending crashes. Such movements typically are completely unpredictable; the aim of this paper is to explore whether these movements are compltely unable to be modelled or are instead the product of some highly non-linear behavior requiring a novel approach. Naturally, birds in large flocks are an interesting candidate to model such emergent behavior in financial markets. Large flocks exhibit features which must be re-interpreted to a financial context, particularly in attraction, repulsion, turning behavior, and in the context of the particular paper, leader/follower dynamics:

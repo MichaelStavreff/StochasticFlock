@@ -163,8 +163,8 @@ template <int N> void init_simulation(Simulation2d<N> &simulation)
     sf::View flock_view(sf::FloatRect(0, 0, simulation.p.kWIDTH_2D, simulation.p.kHEIGHT_2D));
     flock_view.setCenter(0, 0);
 
-    float avg_x;
-    float avg_y;
+    float avg_x{};
+    float avg_y{};
     sf::Color color;
 
     sf::Clock fps_clock;
@@ -203,8 +203,6 @@ template <int N> void init_simulation(Simulation2d<N> &simulation)
                 color = sf::Color::White;
                 size = 2.0f;
             }
-
-            bool is_leader = simulation.states(i, 4) > 0.5;
 
             plot_birds[v + 0].position = sf::Vector2f(x_pos, y_pos);
             plot_birds[v + 1].position = sf::Vector2f(x_pos + size, y_pos);

@@ -7,6 +7,10 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 add_definitions(-DEIGEN_RUNTIME_NO_MALLOC)
 
 # 2. Dependency: Eigen (FetchContent)
+set(EIGEN_BUILD_PKGCONFIG OFF CACHE BOOL "..." FORCE)
+set(EIGEN_BUILD_DOC OFF CACHE BOOL "..." FORCE)
+set(BUILD_TESTING OFF CACHE BOOL "..." FORCE) # Stops Eigen from running 50+ tests
+
 include(FetchContent)
 FetchContent_Declare(
     eigen
@@ -56,13 +60,11 @@ foreach(target ${ALL_TARGETS})
         target_compile_options(${target} PRIVATE -O3 -ffast-math -Wall)
         if(NATIVE_OPTIM)
             target_compile_options(${target} PRIVATE -march=native)
+            include(CheckIPOSupported)
+            check_ipo_supported(RESULT lto_supported OUTPUT lto_error)
+            if(lto_supported)
+                set_target_properties(${target} PROPERTIES INTERPROCEDURAL_OPTIMIZATION TRUE)
+            endif()
         endif()
-    endif()
-
-    # Enable LTO (Interprocedural Optimization)
-    include(CheckIPOSupported)
-    check_ipo_supported(RESULT lto_supported OUTPUT lto_error)
-    if(lto_supported)
-        set_target_properties(${target} PROPERTIES INTERPROCEDURAL_OPTIMIZATION TRUE)
     endif()
 endforeach()

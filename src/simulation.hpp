@@ -331,16 +331,15 @@ template <int kN_BIRDS = Eigen::Dynamic> class Simulation2d
     int steps_back_{};
     int delayed_steps_{};
     int dim_{};
-    int pool_ticker_{}; //hello
+    int pool_ticker_{}; // hello
 
   public:
     Simulation2d(Parameters &param, std::mt19937 &mt,
                  const std::optional<Eigen::Matrix<double, kN_BIRDS, 4>> &initial_conditions = std::nullopt)
-        : p(param), seed_(mt),
-          full_states(get_actual_n(param), 5 * (static_cast<int>(param.kDELAY / param.kTIMESTEP) + 1)),
+        : p(param), full_states(get_actual_n(param), 5 * (static_cast<int>(param.kDELAY / param.kTIMESTEP) + 1)),
           timers(get_actual_n(param), 2 * (static_cast<int>(param.kDELAY / param.kTIMESTEP) + 1)),
-          states(full_states.data(), get_actual_n(param), 5), timer_states(timers.data(), get_actual_n(param), 2),
-          buffer(states), timer_buffer(timer_states)
+          states(full_states.data(), get_actual_n(param), 5), buffer(states),
+          timer_states(timers.data(), get_actual_n(param), 2), timer_buffer(timer_states), seed_(mt)
     {
         const int n = states.rows();
         const int m = param.kM;
