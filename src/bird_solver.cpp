@@ -1,4 +1,3 @@
-
 #include "constants.hpp"
 #include "simulation.hpp"
 #include "visual.hpp"

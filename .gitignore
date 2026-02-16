@@ -3,5 +3,8 @@
 !*.cpp
 !*.hpp
 !*.h
-!*.json
 !*.gitignore
+!*.txt
+!*.toml
+!*.md
+!src/

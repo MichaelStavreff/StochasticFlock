@@ -1,0 +1,11 @@
+# Tools to bridge C++ and Python
+pybind11
+scikit-build-core
+ninja  # Recommended for faster builds
+
+numpy
+eigen  
+
+# Tools for PyPi development
+build
+twine

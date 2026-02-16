@@ -1,5 +1,5 @@
 #include "simulation.hpp"
-#include "visual.hpp"
+// #include "visual.hpp"
 #include <pybind11/eigen.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
@@ -32,24 +32,24 @@ void bind_parameters(py::module &m)
 
 PYBIND11_MODULE(stochastic_flock, m)
 {
-    m.doc() = "Unified Bird Flocking Simulation (1D & 2D)";
+    m.doc() = "Agent-Based Bird Flocking Simulation";
 
     bind_parameters(m);
 
     py::class_<std::mt19937>(m, "MT19937").def(py::init<uint32_t>());
 
-    py::class_<Sim1d>(m, "Simulation1d")
-        .def(py::init<Parameters &, std::mt19937 &>())
-        .def("update",
-             [](Sim1d &self) {
-                 self.update_state();
-                 self.shift_back();
-             })
-        .def_property_readonly("states", [](Sim1d &self) { return self.states; })
-        .def_property_readonly("positions", [](Sim1d &self) { return self.states.col(0); })
-        .def_property_readonly("velocities", [](Sim1d &self) { return self.states.col(1); })
-        .def_property_readonly("status", [](Sim1d &self) { return self.states.col(2); })
-        .def_property_readonly("timers", [](Sim1d &self) { return self.timer_states; });
+    // py::class_<Sim1d>(m, "Simulation1d")
+    //     .def(py::init<Parameters &, std::mt19937 &>())
+    //     .def("update",
+    //          [](Sim1d &self) {
+    //              self.update_state();
+    //              self.shift_back();
+    //          })
+    //     .def_property_readonly("states", [](Sim1d &self) { return self.states; })
+    //     .def_property_readonly("positions", [](Sim1d &self) { return self.states.col(0); })
+    //     .def_property_readonly("velocities", [](Sim1d &self) { return self.states.col(1); })
+    //     .def_property_readonly("status", [](Sim1d &self) { return self.states.col(2); })
+    //     .def_property_readonly("timers", [](Sim1d &self) { return self.timer_states; });
 
     py::class_<Sim2d>(m, "Simulation2d")
         .def(py::init<Parameters &, std::mt19937 &, const std::optional<Eigen::Matrix<double, Eigen::Dynamic, 4>> &>(),
@@ -60,11 +60,11 @@ PYBIND11_MODULE(stochastic_flock, m)
                  self.shift_back();
              })
         .def("debug_tree", &Sim2d::debug_print_tree, py::arg("i") = 0, py::arg("indent") = 0)
-        .def("show",
-             [](Sim2d &self) {
-                 py::gil_scoped_release release; // Allows other Python threads to run while window is open
-                 init_simulation_fontless(self);
-             })
+        // .def("show",
+        //      [](Sim2d &self) {
+        //          py::gil_scoped_release release; // Allows other Python threads to run while window is open
+        //          init_simulation_fontless(self);
+        //      })
 
         .def_property_readonly("states", [](Sim2d &self) { return self.states; })
         .def_property_readonly("positions", [](Sim2d &self) { return self.states.leftCols(2); })

@@ -331,7 +331,7 @@ template <int kN_BIRDS = Eigen::Dynamic> class Simulation2d
     int steps_back_{};
     int delayed_steps_{};
     int dim_{};
-    int pool_ticker_{};
+    int pool_ticker_{}; //hello
 
   public:
     Simulation2d(Parameters &param, std::mt19937 &mt,
