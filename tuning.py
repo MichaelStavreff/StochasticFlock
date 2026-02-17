@@ -11,7 +11,7 @@ statuses = []
 # %%
 print(f"Starting simulation with {params.kN_BIRDS} birds...")
 
-steps = 60000
+steps = 35000
 for i in range(1, steps + 1):
     sim.update()
     velocity_vec_x.append(sim.velocities[0][0])

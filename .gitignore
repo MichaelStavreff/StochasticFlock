@@ -9,3 +9,4 @@
 !*.md
 !src/
 !tuning.py
+!Makefile
