@@ -28,8 +28,23 @@ if(NOT eigen_POPULATED)
     add_subdirectory(${eigen_SOURCE_DIR} ${eigen_BINARY_DIR} EXCLUDE_FROM_ALL)
 endif()
 
-find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
+find_package(Python3 COMPONENTS Interpreter Development.Module REQUIRED) #added .Module
 
+# if(NOT pybind11_FOUND)
+#     execute_process(
+#         COMMAND "${Python3_EXECUTABLE}" -m pybind11 --cmakedir
+#         OUTPUT_VARIABLE pybind11_DIR
+#         OUTPUT_STRIP_TRAILING_WHITESPACE
+#         ERROR_QUIET
+#     )
+# endif()
+
+# # Now find it (using the path discovered above if necessary)
+# find_package(pybind11 REQUIRED)
+
+find_package(pybind11 QUIET)
+
+# If not found, fall back to your manual search (works for your local build)
 if(NOT pybind11_FOUND)
     execute_process(
         COMMAND "${Python3_EXECUTABLE}" -m pybind11 --cmakedir
@@ -37,10 +52,8 @@ if(NOT pybind11_FOUND)
         OUTPUT_STRIP_TRAILING_WHITESPACE
         ERROR_QUIET
     )
+    find_package(pybind11 REQUIRED PATHS ${pybind11_DIR} NO_DEFAULT_PATH)
 endif()
-
-# Now find it (using the path discovered above if necessary)
-find_package(pybind11 REQUIRED)
 
 # 3. Define Optimization Settings (Interface Library)
 # This replaces your 'foreach' loop logic
