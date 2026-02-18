@@ -26,6 +26,7 @@ jobs:
           # This tells Linux to use a modern compiler for C++20
           CIBW_MANYLINUX_X86_64_IMAGE: manylinux_2_28
           # This will show the actual C++ compiler errors in your GitHub logs
+          CIBW_BEFORE_ALL_LINUX: dnf install -y libatomic
           CIBW_BUILD_VERBOSITY: 1
 
       - uses: actions/upload-artifact@v4
