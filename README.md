@@ -26,8 +26,8 @@ pip install stochastic_flock
 ```
 ```Python
 >>> import stochastic_flock
-params = stochastic_flock.Parameters()
-seed = stochastic_flock.MT19937(30)
+>>> params = stochastic_flock.Parameters()
+>>> seed = stochastic_flock.MT19937(30)
 >>> sim = stochastic_flock.Simulation2d(params, seed)
 ```
 ### Developer Setup
