@@ -1,7 +1,7 @@
-name: Build and Upload
+name: Build and Upload to PyPI
 
 on:
-  workflow_dispatch: # Allows manual trigger
+  workflow_dispatch:
   push:
     branches: [ main ]
   release:
@@ -14,26 +14,21 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # macos-13 is Intel, macos-14 is Apple Silicon (M1/M2)
+        # macos-13 (Intel), macos-14 (Apple Silicon)
         os: [ubuntu-latest, windows-latest, macos-13, macos-14]
 
     steps:
       - uses: actions/checkout@v4
         with:
-          submodules: recursive  # IMPORTANT for pybind11 if it's a submodule
+          submodules: recursive
 
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.21.3
         env:
-          # Skip legacy Python versions and 32-bit builds
-          CIBW_SKIP: cp36-* cp37-* cp38-* cp39-* *-win32 *-manylinux_i686
-          
-          # Linux: Use manylinux_2_28 (Almalinux 8 based) for modern C++ support
+          # Only CPython 3.10+, No PyPy (fixes your previous error)
+          CIBW_SKIP: pp* cp36-* cp37-* cp38-* cp39-* *-win32 *-manylinux_i686
+          # manylinux_2_28 provides GCC 11/12 for C++20 support
           CIBW_MANYLINUX_X86_64_IMAGE: manylinux_2_28
-          
-          # If you need specific system libraries, use CIBW_BEFORE_ALL_LINUX
-          # But for standard C++ pybind11, you usually don't need to 'dnf install' anything
-          
           CIBW_BUILD_VERBOSITY: 1
 
       - uses: actions/upload-artifact@v4
@@ -41,14 +36,14 @@ jobs:
           name: cibw-wheels-${{ matrix.os }}-${{ strategy.job-index }}
           path: ./wheelhouse/*.whl
 
-  make_sdist:
-    name: Make SDIST
+  build_sdist:
+    name: Build source distribution
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
-      - name: Build SDIST
+      - name: Build sdist
         run: pipx run build --sdist
       - uses: actions/upload-artifact@v4
         with:
@@ -56,12 +51,12 @@ jobs:
           path: dist/*.tar.gz
 
   upload_pypi:
-    needs: [build_wheels, make_sdist]
+    needs: [build_wheels, build_sdist]
     runs-on: ubuntu-latest
-    # Only upload if a GitHub Release is published
+    # This job only runs when you actually publish a "Release" on GitHub
     if: github.event_name == 'release' && github.event.action == 'published'
     permissions:
-      id-token: write # Required for Trusted Publishing
+      id-token: write # Mandatory for Trusted Publishing
     steps:
       - uses: actions/download-artifact@v4
         with:
