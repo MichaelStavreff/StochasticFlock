@@ -54,7 +54,7 @@ jobs:
     needs: [build_wheels, build_sdist]
     runs-on: ubuntu-latest
     # This job only runs when you actually publish a "Release" on GitHub
-    if: github.event_name == 'release'
+    if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
     permissions:
       id-token: write # Mandatory for Trusted Publishing
       contents: read
