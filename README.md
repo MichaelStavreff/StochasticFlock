@@ -30,6 +30,7 @@ source .venv/bin/activate
 2. Install build dependencies:
 ```Bash
 pip install -r requirements.txt
+make init
 ```
 
 ### Building the Project
@@ -38,7 +39,7 @@ The provided Makefile contains shortcuts for common build scenarios.
 Compiles the Python module into the root directory and the standalone solver into build/.
 
 ```Bash
-make
+make all
 ```
 2. Native Hardware Optimization
 Compiles using -march=native and -ffast-math. This produces the fastest possible binary for your specific CPU but is not portable to other hardware.
@@ -47,7 +48,7 @@ Compiles using -march=native and -ffast-math. This produces the fastest possible
 make native
 ```
 3. Profile-Guided Optimization (PGO) + Native 
-For maximum performance, use PGO to optimize code paths based on simulation data. Uses ```tuning.py``` to instrument and recompiles using native flags.
+For maximum performance, use PGO to optimize code paths based on simulation data for executable file only.
 ```Bash
 make pgo
 ```
