@@ -1,6 +1,7 @@
 name: Build and Upload
 
 on:
+  workflow_dispatch: # Allows manual trigger
   push:
     branches: [ main ]
   release:
@@ -13,20 +14,26 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        # macos-13 is Intel, macos-14 is Apple Silicon (M1/M2)
+        os: [ubuntu-latest, windows-latest, macos-13, macos-14]
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive  # IMPORTANT for pybind11 if it's a submodule
 
       - name: Build wheels
-        uses: pypa/cibuildwheel@v2.17.0
+        uses: pypa/cibuildwheel@v2.21.3
         env:
-          CIBW_SKIP: cp36-* cp37-* pp*
-          CIBW_ENVIRONMENT: SKBUILD=ON
-          # This tells Linux to use a modern compiler for C++20
+          # Skip legacy Python versions and 32-bit builds
+          CIBW_SKIP: cp36-* cp37-* cp38-* cp39-* *-win32 *-manylinux_i686
+          
+          # Linux: Use manylinux_2_28 (Almalinux 8 based) for modern C++ support
           CIBW_MANYLINUX_X86_64_IMAGE: manylinux_2_28
-          # This will show the actual C++ compiler errors in your GitHub logs
-          CIBW_BEFORE_ALL_LINUX: dnf install -y libatomic
+          
+          # If you need specific system libraries, use CIBW_BEFORE_ALL_LINUX
+          # But for standard C++ pybind11, you usually don't need to 'dnf install' anything
+          
           CIBW_BUILD_VERBOSITY: 1
 
       - uses: actions/upload-artifact@v4
@@ -34,12 +41,27 @@ jobs:
           name: cibw-wheels-${{ matrix.os }}-${{ strategy.job-index }}
           path: ./wheelhouse/*.whl
 
-  upload_pypi:
-    needs: [build_wheels]
+  make_sdist:
+    name: Make SDIST
     runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Build SDIST
+        run: pipx run build --sdist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cibw-sdist
+          path: dist/*.tar.gz
+
+  upload_pypi:
+    needs: [build_wheels, make_sdist]
+    runs-on: ubuntu-latest
+    # Only upload if a GitHub Release is published
     if: github.event_name == 'release' && github.event.action == 'published'
     permissions:
-      id-token: write
+      id-token: write # Required for Trusted Publishing
     steps:
       - uses: actions/download-artifact@v4
         with:
