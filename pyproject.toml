@@ -20,3 +20,4 @@ dependencies = [
 wheel.packages = ["src/stochastic_flock"]
 editable.mode = "redirect"      
 cmake.args = ["-DSKBUILD=ON"]
+build-dir = "build/{wheel_tag}"
