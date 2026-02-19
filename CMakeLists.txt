@@ -72,11 +72,11 @@ if(NOT MSVC)
     endif()
 endif()
 
-pybind11_add_module(_core src/python_bindings.cpp)
-target_include_directories(_core PRIVATE src)
-target_link_libraries(_core PRIVATE Eigen3::Eigen sim_opts)
+pybind11_add_module(stochastic_flock src/python_bindings.cpp)
+target_include_directories(stochastic_flock PRIVATE src)
+target_link_libraries(stochastic_flock PRIVATE Eigen3::Eigen sim_opts)
 
-install(TARGETS _core DESTINATION stochastic_flock)
+install(TARGETS stochastic_flock DESTINATION stochastic_flock)
 
 #TODO : ^^^ doesnt install to stochastic_flock folder. perhaps completely remove coupled makefile with bird_solver and python?
 

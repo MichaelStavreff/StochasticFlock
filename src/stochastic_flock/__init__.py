@@ -1,1 +1,1 @@
-from ._core import *
+from .stochastic_flock import *

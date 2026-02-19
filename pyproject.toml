@@ -17,6 +17,6 @@ dependencies = [
 ]
 
 [tool.scikit-build]
-cmake.args = ["-DSKBUILD=ON"]
-wheel.expand-macos-universal-tags = true
 wheel.packages = ["src/stochastic_flock"]
+editable.mode = "redirect"      
+cmake.args = ["-DSKBUILD=ON"]

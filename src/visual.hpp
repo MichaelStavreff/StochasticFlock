@@ -16,20 +16,21 @@ template <int N> class Simulation2d;
 template <int N> class Simulation1d;
 // struct Simulation2d;
 
-sf::Font loadFont(std::string filename)
+sf::Font loadFont()
 {
     sf::Font font;
-    if (!font.loadFromFile(filename))
+    if (!font.loadFromFile("../fonts/verdana.ttf") && !font.loadFromFile("fonts/verdana.ttf"))
     {
-        throw std::invalid_argument("Failed to load font: " + filename);
+        std::cerr << "Failed to load verdana.ttf from both ../ and ./" << std::endl;
     }
+    std::cout << "Refetching font..." << '\n' << "Found!";
     return font;
 }
 template <int N> void init_simulation(Simulation1d<N> &simulation)
 {
     int iterations{};
     const int n = simulation.states.rows();
-    sf::Font font{loadFont("fonts/verdana.ttf")};
+    sf::Font font{loadFont()};
     sf::Text stats;
     sf::Text title;
     stats.setFont(font);
@@ -123,7 +124,7 @@ template <int N> void init_simulation(Simulation2d<N> &simulation)
 {
     int iterations{};
     const int n = simulation.states.rows();
-    sf::Font font{loadFont("fonts/verdana.ttf")};
+    sf::Font font{loadFont()};
     sf::Text stats;
     sf::Text title;
     stats.setFont(font);
@@ -195,7 +196,7 @@ template <int N> void init_simulation(Simulation2d<N> &simulation)
             if (simulation.states(i, 4) > 0.5)
             {
 
-                size = 5.0f;
+                size = 4.0f;
                 color = sf::Color::Yellow;
             }
             else

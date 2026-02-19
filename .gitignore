@@ -24,8 +24,11 @@
 
 # 5. Standard cleanup (Re-ignore build artifacts)
 build/
+build_pgo/
+build_native/
 dist/
 __pycache__/
 *.egg-info/
 *.so
 .venv/
+src/stochastic_flock/__init__.py

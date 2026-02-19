@@ -1,4 +1,6 @@
+# %%
 import stochastic_flock
+import sys
 
 params = stochastic_flock.Parameters()
 params.kN_BIRDS = 50
@@ -19,3 +21,6 @@ for i in range(1, steps + 1):
     statuses.append(sim.status[0])
     if i % 50 == 0:
         print(f"Step {i} completed...")
+
+print("Simulation finished.")
+sys.exit(0)

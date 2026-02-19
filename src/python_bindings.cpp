@@ -30,7 +30,7 @@ void bind_parameters(py::module &m)
         .def_readwrite("kBUFFER_CYCLES", &Parameters::kBUFFER_CYCLES); // must be calculated manually in python
 }
 
-PYBIND11_MODULE(_core, m)
+PYBIND11_MODULE(stochastic_flock, m)
 {
     m.doc() = "Agent-Based Bird Flocking Simulation";
 
