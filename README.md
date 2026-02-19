@@ -69,6 +69,8 @@ For local development, after running make, you can import the module directly in
 
 ```Python
 >>> import stochastic_flock
+params = stochastic_flock.Parameters()
+seed = stochastic_flock.MT19937(30)
 >>> sim = stochastic_flock.Simulation2d(params, seed)
 ```
 ## Introduction
