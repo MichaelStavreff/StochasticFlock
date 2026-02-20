@@ -17,7 +17,19 @@ To build the project from source, you will need:
   ```bash 
   sudo apt install libsfml-dev
   ```
+### Python Usage
 
+If you simply wish to use the simulation in a Python environment without modifying the C++ source:
+
+```Bash
+pip install stochastic_flock
+```
+```Python
+>>> import stochastic_flock
+>>> params = stochastic_flock.Parameters()
+>>> seed = stochastic_flock.MT19937(30)
+>>> sim = stochastic_flock.Simulation2d(params, seed)
+```
 ### Developer Setup
 1. Clone and create a virtual environment:
 
@@ -30,6 +42,7 @@ source .venv/bin/activate
 2. Install build dependencies:
 ```Bash
 pip install -r requirements.txt
+make init
 ```
 
 ### Building the Project
@@ -38,7 +51,7 @@ The provided Makefile contains shortcuts for common build scenarios.
 Compiles the Python module into the root directory and the standalone solver into build/.
 
 ```Bash
-make
+make all
 ```
 2. Native Hardware Optimization
 Compiles using -march=native and -ffast-math. This produces the fastest possible binary for your specific CPU but is not portable to other hardware.
@@ -47,7 +60,7 @@ Compiles using -march=native and -ffast-math. This produces the fastest possible
 make native
 ```
 3. Profile-Guided Optimization (PGO) + Native 
-For maximum performance, use PGO to optimize code paths based on simulation data. Uses ```tuning.py``` to instrument and recompiles using native flags.
+For maximum performance, use PGO to optimize code paths based on simulation data for executable file only.
 ```Bash
 make pgo
 ```
@@ -57,19 +70,7 @@ Compiles with debug symbols (-g) and Undefined Behavior Sanitizers for use with 
 ```Bash
 make debug
 ```
-### Python Usage
-
-If you simply wish to use the simulation in a Python environment without modifying the C++ source:
-
-```Bash
-pip install stochastic_flock
-```
-For local development, after running make, you can import the module directly in the root directory:
-
-```Python
->>> import stochastic_flock
->>> sim = stochastic_flock.Simulation2d(params, seed)
-```
+For local Python development, after running make, you can import the module directly inside the project directory.
 ## Introduction
 Financial markets have famously exhibited flocking or herding behavior, most famously during crises and impending crashes. Such movements typically are completely unpredictable; the aim of this paper is to explore whether these movements are compltely unable to be modelled or are instead the product of some highly non-linear behavior requiring a novel approach. Naturally, birds in large flocks are an interesting candidate to model such emergent behavior in financial markets. Large flocks exhibit features which must be re-interpreted to a financial context, particularly in attraction, repulsion, turning behavior, and in the context of the particular paper, leader/follower dynamics:
 
