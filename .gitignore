@@ -9,10 +9,10 @@
 !*.hpp
 !*.h
 !*.gitignore
-!*.txt
+!.*.txt
 !*.toml
 !*.md
-!Makefile
+!.Makefile
 !.github/
 !.github/workflows/*.yml
 

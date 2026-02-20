@@ -8,13 +8,10 @@
 #include <limits>
 #include <numeric>
 #include <optional>
-#include <ostream> //endl
 #include <random>
 
 #include "constants.hpp"
-
 //  revisit nearest neighbors for 1D, pointer walk better?
-// cmake
 // evaluate where to include floats or doubles (during calculations/cast back to float for storage)
 // verify SIMD/cache misses
 struct Parameters
@@ -33,8 +30,8 @@ struct Parameters
     double kEPSILON{0.001};      // std::numeric_limits<double>::epsilon() for machine epsilon, 0.0001
     int kBUFFER_CYCLES{static_cast<int>(kDELAY / kTIMESTEP)};
 
-    int kFRAMERATE{60};
-    int kROUNDS{100000};
+    int kFRAMERATE{500};
+    int kROUNDS{std::numeric_limits<int>::max()};
     // Higher dimensional parameters
     int kTREE_MEDIAN_SAMPLE{30}; // could profile
     int kLEAF_SIZE{16};          // double once using floats to fit SIMD registers better, could profile

@@ -1,11 +1,9 @@
+#include "pch_python.hpp" //included outside Cmake just for static checker
 #include "simulation.hpp"
-#include <pybind11/eigen.h>
-#include <pybind11/pybind11.h>
-#include <pybind11/stl.h>
 
-namespace py = pybind11;
 using Sim1d = Simulation1d<Eigen::Dynamic>;
 using Sim2d = Simulation2d<Eigen::Dynamic>;
+
 void init_simulation(Sim2d &sim);
 
 void bind_parameters(py::module &m)

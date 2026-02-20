@@ -1,6 +1,4 @@
 #pragma once
-#include <Eigen/Dense>
-#include <SFML/Graphics.hpp>
 #include <cmath>
 #include <format>
 #include <iostream>
@@ -10,11 +8,11 @@
 #include <vector>
 
 #include "constants.hpp"
+#include "pch_exec.hpp"
 #include "simulation.hpp"
 
 template <int N> class Simulation2d;
 template <int N> class Simulation1d;
-// struct Simulation2d;
 
 sf::Font loadFont()
 {

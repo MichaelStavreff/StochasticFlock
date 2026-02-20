@@ -1,5 +1,4 @@
 #pragma once
-
 inline constexpr int kFRAMERATE{60};
 inline constexpr int kROUNDS{10000};
 // Higher dimensional parameters

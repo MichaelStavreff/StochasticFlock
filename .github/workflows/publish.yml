@@ -1,11 +1,9 @@
 name: Build and Upload to PyPI
 
 on:
-  workflow_dispatch:
-  push:
-    branches: [ main ]
+  workflow_dispatch: # Allows manual trigger from the "Actions" tab
   release:
-    types: [published, created, released] # Added more types for safety
+    types: [published, created, released] 
 
 jobs:
   build_wheels:
