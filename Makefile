@@ -59,6 +59,7 @@ help:
 	@echo "make pgo       : Uses profile-guided optimization and native flags."
 	@echo "                "
 	@echo "make clean     : Remove all build directories and compiled binaries."
+	@echo "make init      : Initialize editable Python environment."
 	@echo "========================================================================"
 
 # 1. DEV: Just the executable, no optimizations, no LTO, instant builds
@@ -94,3 +95,5 @@ debug:
 clean:
 	rm -rf build_dev build build_portable build_native build_pgo src/stochastic_flock/*.so
 
+init:
+	$(PYTHON) -m pip install -e .
