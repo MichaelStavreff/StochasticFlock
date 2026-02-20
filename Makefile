@@ -43,24 +43,27 @@
 
 PYTHON = $(shell pwd)/.venv/bin/python3
 THREADS = $(shell nproc)
-.PHONY: dev portable native pgo clean help
+.PHONY: dev portable native pgo clean help debug
 
 help:
 	@echo "========================================================================"
-	@echo "make dev       : FASTEST build. Debug mode, no LTO, executable only."
+	@echo "make dev       : Development build. Debug mode, no LTO, executable only."
 	@echo "                 "
-	@echo "make portable  : PROD build. Optimized (-O3), LTO on, but PORTABLE."
+	@echo "make debug     : Debug build with sanitizers, executable and python build."
+	@echo "                 "
+	@echo "make portable  : Optimized (-O3), LTO on, but PORTABLE."
 	@echo "                 Builds Python module and executable."
 	@echo
-	@echo "make native    : MAX SPEED build. Optimized for native architecture, not portable."
+	@echo "make native    : Optimized for native architecture, not portable."
 	@echo "                "
-	@echo "make pgo       : EXTREME build. Uses profile-guided optimization."
+	@echo "make pgo       : Uses profile-guided optimization and native flags."
+	@echo "                "
 	@echo "make clean     : Remove all build directories and compiled binaries."
 	@echo "========================================================================"
 
 # 1. DEV: Just the executable, no optimizations, no LTO, instant builds
 dev:
-	@cmake -B build_dev -S . -DCMAKE_BUILD_TYPE=Debug -DPython3_EXECUTABLE=$(PYTHON)
+	@cmake -B build_dev -S . -DCMAKE_BUILD_TYPE=Debug -DUSE_SANITIZERS=ON -DPython3_EXECUTABLE=$(PYTHON)
 	@cmake --build build_dev --target bird_solver -j $(THREADS)
 	@echo "Dev build complete: ./build_dev/bird_solver"
 
@@ -84,6 +87,10 @@ pgo:
 	@cmake -B build_pgo -S . -DCMAKE_BUILD_TYPE=Release -DNATIVE_OPTIM=ON -DCMAKE_CXX_FLAGS="-fprofile-use" -DPython3_EXECUTABLE=$(PYTHON)
 	@cmake --build build_pgo -j $(THREADS)
 
+debug:
+	@cmake -B build_debug -S . -DCMAKE_BUILD_TYPE=Debug -DUSE_SANITIZERS=ON -DPython3_EXECUTABLE=$(PYTHON)
+	@cmake --build build_debug -j $(THREADS)
+	@echo "Full Debug build (with Sanitizers) complete in build_debug/"
 clean:
 	rm -rf build_dev build build_portable build_native build_pgo src/stochastic_flock/*.so
 

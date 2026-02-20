@@ -1,12 +1,10 @@
-# 1. Ignore everything by default
 *
 
 # 2. Allow all directories so Git can search them
 !*/
 
-# 3. Un-ignore C++ and Project Metadata files (anywhere)
-!*.cpp
-!*.hpp
+!*./src/*.cpp
+!*./src/*.hpp
 !*.h
 !*.gitignore
 !.*.txt
@@ -17,12 +15,9 @@
 !.github/workflows/*.yml
 
 # 4. Handle Python files:
-# We DON'T un-ignore *.py globally (this keeps root .py files ignored).
-# Instead, we only un-ignore the specific folder you want:
 !src/stochastic_flock/
 !src/stochastic_flock/*.py
 
-# 5. Standard cleanup (Re-ignore build artifacts)
 build/
 build_pgo/
 build_native/
