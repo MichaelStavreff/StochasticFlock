@@ -1,5 +1,3 @@
-# 1. Path to your virtual environment's python
-# This ensures we use your .venv even if it isn't "activated" in the terminal
 PYTHON = $(shell pwd)/.venv/bin/python3
 THREADS = $(shell nproc)
 
@@ -10,7 +8,7 @@ all:
 	@if [ ! -d "build" ]; then \
 		cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DPython3_EXECUTABLE=$(PYTHON); \
 	fi
-# Use -j to use all CPU cores
+	
 	cmake --build build -j $(THREADS)
 	cp build/stochastic_flock*.so src/stochastic_flock
 
@@ -33,7 +31,7 @@ debug:
 	cmake --build build_debug  -j $(THREADS)
 
 clean:
-	rm -rf build build_native build_debug build_pgo *.so *.gcda dist
+	rm -rf build build_native build_debug build_pgo *.so *.gcda dist src/stochastic_flock/*.so
 
 help:
 	@echo "all:    Standard build"

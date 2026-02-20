@@ -25,7 +25,7 @@ jobs:
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.21.3
         env:
-          # Only CPython 3.10+, No PyPy (fixes your previous error)
+          # Only CPython 3.10+, No PyPy
           CIBW_SKIP: pp* cp36-* cp37-* cp38-* cp39-* *-win32 *-manylinux_i686
           # manylinux_2_28 provides GCC 11/12 for C++20 support
           CIBW_MANYLINUX_X86_64_IMAGE: manylinux_2_28
@@ -53,10 +53,10 @@ jobs:
   upload_pypi:
     needs: [build_wheels, build_sdist]
     runs-on: ubuntu-latest
-    # This job only runs when you actually publish a "Release" on GitHub
+    
     if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
     permissions:
-      id-token: write # Mandatory for Trusted Publishing
+      id-token: write 
       contents: read
     steps:
       - uses: actions/download-artifact@v4

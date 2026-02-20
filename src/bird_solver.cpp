@@ -41,6 +41,7 @@ int main()
     Eigen::Matrix<double, Eigen::Dynamic, 4> positions;
     positions.resize(p.kN_BIRDS, 4);
     positions = positions.setRandom() * 100;
+    std::cout << positions;
 
     Simulation2d<> Sim(p, mt, positions);
     init_simulation(Sim);
