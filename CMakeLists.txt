@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.18)
-project(stochastic_flock LANGUAGES CXX)
+project(stochastic_flock_core LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -72,15 +72,15 @@ endif()
 include(CheckIPOSupported)
 check_ipo_supported(RESULT lto_supported)
 
-# --- 4. Python Module (stochastic_flock) ---
-pybind11_add_module(stochastic_flock src/python_bindings.cpp)
-target_include_directories(stochastic_flock PRIVATE src)
-target_link_libraries(stochastic_flock PRIVATE Eigen3::Eigen sim_opts)
-target_precompile_headers(stochastic_flock PRIVATE src/pch_python.hpp)
+# --- 4. Python Module (stochastic_flock_core) ---
+pybind11_add_module(stochastic_flock_core src/python_bindings.cpp)
+target_include_directories(stochastic_flock_core PRIVATE src)
+target_link_libraries(stochastic_flock_core PRIVATE Eigen3::Eigen sim_opts)
+target_precompile_headers(stochastic_flock_core PRIVATE src/pch_python.hpp)
 
 # Always use LTO for the Python module in Release for max performance
 if(lto_supported)
-    set_target_properties(stochastic_flock PROPERTIES INTERPROCEDURAL_OPTIMIZATION_RELEASE TRUE)
+    set_target_properties(stochastic_flock_core PROPERTIES INTERPROCEDURAL_OPTIMIZATION_RELEASE TRUE)
 endif()
 
 # --- 5. Executable (bird_solver) ---

@@ -72,7 +72,7 @@ dev:
 portable:
 	@cmake -B build_portable -S . -DCMAKE_BUILD_TYPE=Release -DNATIVE_OPTIM=OFF -DPython3_EXECUTABLE=$(PYTHON)
 	@cmake --build build_portable -j $(THREADS)
-	@cp build_portable/stochastic_flock*.so src/stochastic_flock/ 2>/dev/null || true
+	@cp build_portable/stochastic_flock_core*.so src/stochastic_flock/
 	@echo "Portable build complete in build_portable/"
 
 # 3. NATIVE: Max speed for YOUR specific CPU (not portable)
@@ -93,7 +93,7 @@ debug:
 	@cmake --build build_debug -j $(THREADS)
 	@echo "Full Debug build (with Sanitizers) complete in build_debug/"
 clean:
-	rm -rf build_dev build build_portable build_native build_pgo src/stochastic_flock/*.so
+	rm -rf build_dev build build_portable build_debug build_native build_pgo src/stochastic_flock_core/*.so
 
 init:
 	$(PYTHON) -m pip install -e .

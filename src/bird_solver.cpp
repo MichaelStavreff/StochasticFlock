@@ -35,9 +35,11 @@ int main()
 
     p.kWIDTH_2D = 2100;
     p.kHEIGHT_2D = 1300;
+    p.kN_BIRDS = get_parameter(300, "Bird count");
     p.kREP = get_parameter(2.5, "Repulsion force");
     p.kATT = get_parameter(0.01, "Attraction force");
-    p.kN_BIRDS = get_parameter(300, "Bird count");
+    p.kM = get_parameter(7, "M-nearest birds");
+    p.kPD = get_parameter(400, "Squared persistence distance");
     std::mt19937 mt;
     mt.seed(get_parameter(std::random_device{}(), "Seed value"));
 
