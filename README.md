@@ -46,29 +46,9 @@ make init
 ```
 
 ### Building the Project
-The provided Makefile contains shortcuts for common build scenarios.
-1. Standard Build (Python + C++ Solver)
-Compiles the Python module into the root directory and the standalone solver into build/.
-
+The provided Makefile contains shortcuts for common build scenarios, including regular development, debug, and hardware optimized or profiled builds.
 ```Bash
-make all
-```
-2. Native Hardware Optimization
-Compiles using -march=native and -ffast-math. This produces the fastest possible binary for your specific CPU but is not portable to other hardware.
-
-```Bash
-make native
-```
-3. Profile-Guided Optimization (PGO) + Native 
-For maximum performance, use PGO to optimize code paths based on simulation data for executable file only.
-```Bash
-make pgo
-```
-4. Debug Mode
-Compiles with debug symbols (-g) and Undefined Behavior Sanitizers for use with GDB/LLDB.
-
-```Bash
-make debug
+make help
 ```
 For local Python development, after running make, you can import the module directly inside the project directory.
 ## Introduction
