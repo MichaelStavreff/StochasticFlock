@@ -29,3 +29,4 @@ __pycache__/
 *.so
 .venv/
 src/stochastic_flock/__init__.py
+_deps

@@ -18,6 +18,10 @@ dependencies = [
 
 [tool.scikit-build]
 wheel.packages = ["src/stochastic_flock"]
+wheel.install-dir = "src/stochastic_flock"
 editable.mode = "redirect"      
 cmake.args = ["-DSKBUILD=ON"]
 build-dir = "build/{wheel_tag}"
+
+[tool.scikit-build.sdist]
+include = ["CMakeLists.txt", "src/**"]
