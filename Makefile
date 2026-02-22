@@ -93,7 +93,7 @@ debug:
 	@cmake --build build_debug -j $(THREADS)
 	@echo "Full Debug build (with Sanitizers) complete in build_debug/"
 clean:
-	rm -rf build_dev build build_portable build_debug build_native build_pgo src/stochastic_flock_core/*.so
+	rm -rf build_dev build build_portable build_debug build_native build_pgo src/stochastic_flock/stochastic_flock_core*.so dist
 
 init:
 	$(PYTHON) -m pip install -e .
