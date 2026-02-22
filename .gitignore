@@ -18,6 +18,8 @@
 !src/stochastic_flock/
 !src/stochastic_flock/*.py
 
+build_debug/
+build_dev/
 build/
 build_pgo/
 build_native/
