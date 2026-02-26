@@ -478,8 +478,6 @@ template <int kN_BIRDS = Eigen::Dynamic> class Simulation2d
                 continue;
             }
 
-            dimensions_(Task.pool_idx) = dim_;
-
             scratchpad_x.head(n_node_birds) = positions.col(0)(tree_idx_.segment(Task.start, n_node_birds));
             scratchpad_y.head(n_node_birds) = positions.col(1)(tree_idx_.segment(Task.start, n_node_birds));
 
@@ -488,6 +486,7 @@ template <int kN_BIRDS = Eigen::Dynamic> class Simulation2d
             dim_ = (std::abs(x_view.maxCoeff() - x_view.minCoeff()) > std::abs(y_view.maxCoeff() - y_view.minCoeff()))
                        ? 0
                        : 1;
+            dimensions_(Task.pool_idx) = dim_;
 
             int endpoint = std::min(kTREE_MEDIAN_SAMPLE, n_node_birds);
             std::nth_element(tree_idx_.begin() + Task.start, tree_idx_.begin() + Task.start + endpoint / 2,
